@@ -1,0 +1,614 @@
+// The module 'vscode' contains the VS Code extensibility API
+// Import the module and reference it with the alias vscode in your code below
+const vscode = require('vscode');
+const fs = require('fs');
+const path = require('path');
+const https = require('https');
+require('dotenv').config({ path: path.join(__dirname, '.env.local') });
+
+/**
+ * PowerSchool API client for Custom Page Management
+ */
+class PowerSchoolAPI {
+	constructor() {
+		// Load configuration from environment variables
+		this.serverUrl = process.env.PSTEST_URI?.replace(/\/$/, '') || '';
+		this.clientId = process.env.PSTEST_CLIENT_ID || '';
+		this.clientSecret = process.env.PSTEST_CLIENT_SECRET || '';
+		this.accessToken = null;
+		this.tokenExpiry = null;
+		this.cacheFile = path.join(__dirname, 'access_token_cache.json');
+		
+		if (!this.serverUrl || !this.clientId || !this.clientSecret) {
+			throw new Error('Missing PowerSchool configuration in .env.local file. Please ensure PSTEST_URI, PSTEST_CLIENT_ID, and PSTEST_CLIENT_SECRET are set.');
+		}
+
+		console.log(`PowerSchool API initialized with server: ${this.serverUrl}`);
+		
+		// Load cached token on initialization
+		this.loadCachedToken();
+	}
+
+	/**
+	 * Load cached access token from file
+	 */
+	loadCachedToken() {
+		try {
+			if (fs.existsSync(this.cacheFile)) {
+				const cacheData = JSON.parse(fs.readFileSync(this.cacheFile, 'utf8'));
+				const now = Math.floor(Date.now() / 1000);
+				
+				if (cacheData.expires_at && now < cacheData.expires_at) {
+					this.accessToken = cacheData.access_token;
+					this.tokenExpiry = cacheData.expires_at * 1000; // Convert to milliseconds
+					console.log(`Loaded cached token, expires at: ${new Date(this.tokenExpiry)}`);
+				} else {
+					console.log('Cached token expired, will request new one');
+					// Clean up expired cache
+					fs.unlinkSync(this.cacheFile);
+				}
+			}
+		} catch (error) {
+			console.log(`Error loading cached token: ${error.message}`);
+		}
+	}
+
+	/**
+	 * Cache access token to file
+	 * @param {string} token 
+	 * @param {number} expiresIn 
+	 */
+	cacheToken(token, expiresIn) {
+		try {
+			const now = Math.floor(Date.now() / 1000);
+			const expiresAt = now + expiresIn - 60; // Subtract 60s for safety like Ruby code
+			
+			const cacheData = {
+				access_token: token,
+				expires_at: expiresAt,
+				cached_at: now
+			};
+			
+			fs.writeFileSync(this.cacheFile, JSON.stringify(cacheData, null, 2));
+			console.log(`Token cached, expires at: ${new Date(expiresAt * 1000)}`);
+		} catch (error) {
+			console.log(`Error caching token: ${error.message}`);
+		}
+	}
+
+	/**
+	 * Test server connectivity
+	 * @returns {Promise<boolean>}
+	 */
+	async testServerConnectivity() {
+		return new Promise((resolve) => {
+			try {
+				const url = new URL(this.serverUrl);
+				const protocol = url.protocol === 'https:' ? https : require('http');
+				
+				const options = {
+					hostname: url.hostname,
+					port: url.port || (url.protocol === 'https:' ? 443 : 80),
+					path: '/',
+					method: 'HEAD',
+					timeout: 5000
+				};
+
+				const req = protocol.request(options, (res) => {
+					console.log(`Server connectivity test: ${res.statusCode}`);
+					resolve(true);
+				});
+
+				req.on('error', (error) => {
+					console.log(`Server connectivity failed: ${error.message}`);
+					resolve(false);
+				});
+
+				req.on('timeout', () => {
+					console.log('Server connectivity timed out');
+					req.destroy();
+					resolve(false);
+				});
+
+				req.end();
+			} catch (error) {
+				console.log(`Server connectivity error: ${error.message}`);
+				resolve(false);
+			}
+		});
+	}
+
+	/**
+	 * Try multiple OAuth endpoints
+	 * @returns {Promise<string>}
+	 */
+	async tryOAuthEndpoints() {
+		// First test basic server connectivity
+		const canConnect = await this.testServerConnectivity();
+		if (!canConnect) {
+			throw new Error(`Cannot connect to PowerSchool server: ${this.serverUrl}`);
+		}
+
+		const endpoints = [
+			'/oauth/access_token/',  // Match Ruby code with trailing slash
+			'/oauth/access_token',   // Without slash as backup
+			'/ws/oauth/access_token/', 
+			'/ws/oauth/access_token',
+			'/admin/oauth/access_token/'
+		];
+
+		for (const endpoint of endpoints) {
+			try {
+				console.log(`Trying OAuth endpoint: ${endpoint}`);
+				const token = await this.requestOAuthToken(endpoint);
+				return token;
+			} catch (error) {
+				console.log(`Failed with endpoint ${endpoint}: ${error.message}`);
+				// Add a small delay between attempts
+				await new Promise(resolve => setTimeout(resolve, 500));
+				continue;
+			}
+		}
+
+		throw new Error('All OAuth endpoints failed. Please check your PowerSchool configuration.');
+	}
+
+	/**
+	 * Get OAuth access token from PowerSchool
+	 * @returns {Promise<string>}
+	 */
+	async getAccessToken() {
+		// Check if we have a valid token
+		if (this.accessToken && this.tokenExpiry && Date.now() < this.tokenExpiry) {
+			return this.accessToken;
+		}
+
+		return await this.tryOAuthEndpoints();
+	}
+
+	/**
+	 * Request OAuth token from specific endpoint
+	 * @param {string} endpoint
+	 * @returns {Promise<string>}
+	 */
+	async requestOAuthToken(endpoint) {
+		return new Promise((resolve, reject) => {
+			const url = new URL(this.serverUrl + endpoint);
+			
+			// Use Basic Auth like the Ruby code - encode client_id:client_secret in Base64
+			const authString = `${this.clientId}:${this.clientSecret}`;
+			const encodedAuth = Buffer.from(authString).toString('base64');
+			
+			const postData = new URLSearchParams({
+				'grant_type': 'client_credentials'
+			}).toString();
+
+			console.log(`OAuth Request URL: ${url.toString()}`);
+			console.log(`OAuth Request Data: ${postData}`);
+			console.log(`OAuth Basic Auth: Basic ${encodedAuth.substring(0, 20)}...`);
+
+			const protocol = url.protocol === 'https:' ? https : require('http');
+			const options = {
+				hostname: url.hostname,
+				port: url.port || (url.protocol === 'https:' ? 443 : 80),
+				path: url.pathname,
+				method: 'POST',
+				headers: {
+					'Authorization': `Basic ${encodedAuth}`,
+					'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+					'Content-Length': Buffer.byteLength(postData)
+				},
+				rejectUnauthorized: false // For self-signed certificates
+			};
+
+			console.log(`OAuth Request Options:`, options);
+
+			const req = protocol.request(options, (res) => {
+				let data = '';
+
+				console.log(`OAuth Response Status: ${res.statusCode}`);
+				console.log(`OAuth Response Headers:`, res.headers);
+
+				// Handle redirects (3xx status codes)
+				if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+					console.log(`Following redirect to: ${res.headers.location}`);
+					
+					// Parse the redirect URL
+					const redirectUrl = new URL(res.headers.location);
+					const redirectProtocol = redirectUrl.protocol === 'https:' ? https : require('http');
+					
+					// Create new request options for redirect
+					const redirectOptions = {
+						hostname: redirectUrl.hostname,
+						port: redirectUrl.port || (redirectUrl.protocol === 'https:' ? 443 : 80),
+						path: redirectUrl.pathname,
+						method: 'POST',
+						headers: options.headers,
+						rejectUnauthorized: false
+					};
+
+					// Make the redirected request
+					const redirectReq = redirectProtocol.request(redirectOptions, (redirectRes) => {
+						let redirectData = '';
+						
+						console.log(`Redirect Response Status: ${redirectRes.statusCode}`);
+						console.log(`Redirect Response Headers:`, redirectRes.headers);
+
+						redirectRes.on('data', (chunk) => {
+							redirectData += chunk;
+						});
+
+						redirectRes.on('end', () => {
+							console.log(`Redirect Response Body: "${redirectData}"`);
+							console.log(`Redirect Response Length: ${redirectData.length}`);
+							
+							if (redirectRes.statusCode !== 200) {
+								reject(new Error(`OAuth redirect failed with status ${redirectRes.statusCode}: ${redirectData}`));
+								return;
+							}
+
+							// Process the successful redirect response
+							this.processOAuthResponse(redirectData, resolve, reject);
+						});
+					});
+
+					redirectReq.on('error', (error) => {
+						reject(new Error(`OAuth redirect request failed: ${error.message}`));
+					});
+
+					redirectReq.setTimeout(10000, () => {
+						redirectReq.destroy();
+						reject(new Error('OAuth redirect request timed out after 10 seconds'));
+					});
+
+					redirectReq.write(postData);
+					redirectReq.end();
+					return;
+				}
+
+				res.on('data', (chunk) => {
+					data += chunk;
+				});
+
+				res.on('end', () => {
+					console.log(`OAuth Response Body: "${data}"`);
+					console.log(`OAuth Response Length: ${data.length}`);
+					
+					if (res.statusCode !== 200) {
+						reject(new Error(`OAuth request failed with status ${res.statusCode}: ${data}`));
+						return;
+					}
+
+					// Process the successful response
+					this.processOAuthResponse(data, resolve, reject);
+				});
+			});
+				});
+			});
+
+			req.on('error', (error) => {
+				reject(new Error(`OAuth request failed: ${error.message}`));
+			});
+
+			// Add timeout to prevent hanging
+			req.setTimeout(10000, () => {
+				req.destroy();
+				reject(new Error('OAuth request timed out after 10 seconds'));
+			});
+
+			req.write(postData);
+			req.end();
+		});
+	}
+
+	/**
+	 * Make HTTP request to PowerSchool API
+	 * @param {string} endpoint 
+	 * @param {string} method 
+	 * @param {object} params 
+	 * @returns {Promise<object>}
+	 */
+	async makeRequest(endpoint, method = 'GET', params = {}) {
+		// Get access token first
+		const token = await this.getAccessToken();
+
+		return new Promise((resolve, reject) => {
+			const url = new URL(this.serverUrl + endpoint);
+			
+			if (method === 'GET' && Object.keys(params).length > 0) {
+				Object.keys(params).forEach(key => {
+					url.searchParams.append(key, params[key]);
+				});
+			}
+
+			const protocol = url.protocol === 'https:' ? https : require('http');
+			const options = {
+				hostname: url.hostname,
+				port: url.port || (url.protocol === 'https:' ? 443 : 80),
+				path: url.pathname + url.search,
+				method: method,
+				headers: {
+					'Accept': 'application/json',
+					'Content-Type': 'application/json',
+					'Authorization': `Bearer ${token}`
+				},
+				rejectUnauthorized: false // For self-signed certificates
+			};
+
+			const req = protocol.request(options, (res) => {
+				let data = '';
+
+				res.on('data', (chunk) => {
+					data += chunk;
+				});
+
+				res.on('end', () => {
+					try {
+						const jsonData = JSON.parse(data);
+						resolve(jsonData);
+					} catch (error) {
+						reject(new Error(`Failed to parse JSON: ${error.message}`));
+					}
+				});
+			});
+
+			req.on('error', (error) => {
+				reject(error);
+			});
+
+			if (method === 'POST' && Object.keys(params).length > 0) {
+				req.write(JSON.stringify(params));
+			}
+
+			req.end();
+		});
+	}
+
+	/**
+	 * Get folder tree from PowerSchool
+	 * @param {string} folderPath 
+	 * @param {number} maxDepth 
+	 * @returns {Promise<object>}
+	 */
+	async getFolderTree(folderPath = '/', maxDepth = 5) {
+		return await this.makeRequest('/ws/cpm/tree', 'GET', {
+			path: folderPath,
+			maxDepth: maxDepth
+		});
+	}
+}
+
+/**
+ * File system synchronization utilities
+ */
+class FileSystemSync {
+	constructor(workspaceRoot) {
+		this.workspaceRoot = workspaceRoot;
+		this.psWebrootPath = path.join(workspaceRoot, 'ps_webroot');
+	}
+
+	/**
+	 * Ensure ps_webroot directory exists
+	 */
+	ensureWebrootDirectory() {
+		if (!fs.existsSync(this.psWebrootPath)) {
+			fs.mkdirSync(this.psWebrootPath, { recursive: true });
+			vscode.window.showInformationMessage('Created ps_webroot directory');
+		}
+	}
+
+	/**
+	 * Get local directory structure
+	 * @param {string} dirPath 
+	 * @returns {object}
+	 */
+	getLocalStructure(dirPath = this.psWebrootPath) {
+		const structure = {
+			folders: [],
+			files: []
+		};
+
+		if (!fs.existsSync(dirPath)) {
+			return structure;
+		}
+
+		const items = fs.readdirSync(dirPath, { withFileTypes: true });
+		
+		for (const item of items) {
+			if (item.isDirectory()) {
+				structure.folders.push({
+					name: item.name,
+					path: path.join(dirPath, item.name)
+				});
+			} else {
+				structure.files.push({
+					name: item.name,
+					path: path.join(dirPath, item.name)
+				});
+			}
+		}
+
+		return structure;
+	}
+
+	/**
+	 * Convert PowerSchool API response to normalized structure
+	 * @param {object} apiResponse 
+	 * @returns {object}
+	 */
+	normalizeApiStructure(apiResponse) {
+		const structure = {
+			folders: [],
+			files: []
+		};
+
+		if (apiResponse.folder) {
+			// Add subfolders
+			if (apiResponse.folder.subFolders) {
+				structure.folders = apiResponse.folder.subFolders.map(folder => ({
+					name: folder.text,
+					custom: folder.custom
+				}));
+			}
+
+			// Add pages (files)
+			if (apiResponse.folder.pages) {
+				structure.files = apiResponse.folder.pages.map(page => ({
+					name: page.text,
+					custom: page.custom,
+					binary: page.binary,
+					active: page.active
+				}));
+			}
+		}
+
+		return structure;
+	}
+
+	/**
+	 * Sync local directory with PowerSchool structure
+	 * @param {object} apiResponse 
+	 */
+	async syncWithPowerSchool(apiResponse) {
+		this.ensureWebrootDirectory();
+		
+		const remoteStructure = this.normalizeApiStructure(apiResponse);
+		const localStructure = this.getLocalStructure();
+
+		// Create missing folders
+		for (const remoteFolder of remoteStructure.folders) {
+			const localFolder = localStructure.folders.find(f => f.name === remoteFolder.name);
+			if (!localFolder) {
+				const folderPath = path.join(this.psWebrootPath, remoteFolder.name);
+				fs.mkdirSync(folderPath, { recursive: true });
+				vscode.window.showInformationMessage(`Created folder: ${remoteFolder.name}`);
+			}
+		}
+
+		// Create missing files (as placeholders)
+		for (const remoteFile of remoteStructure.files) {
+			const localFile = localStructure.files.find(f => f.name === remoteFile.name);
+			if (!localFile) {
+				const filePath = path.join(this.psWebrootPath, remoteFile.name);
+				const placeholder = remoteFile.binary 
+					? '# Binary file placeholder\n# This file exists in PowerSchool but cannot be synced as text'
+					: `# PowerSchool Custom Page: ${remoteFile.name}\n# Custom: ${remoteFile.custom}\n# Active: ${remoteFile.active}\n\n`;
+				
+				fs.writeFileSync(filePath, placeholder);
+				vscode.window.showInformationMessage(`Created file: ${remoteFile.name}`);
+			}
+		}
+
+		// Remove local files/folders that don't exist remotely
+		for (const localFolder of localStructure.folders) {
+			const remoteFolder = remoteStructure.folders.find(f => f.name === localFolder.name);
+			if (!remoteFolder) {
+				fs.rmSync(localFolder.path, { recursive: true, force: true });
+				vscode.window.showWarningMessage(`Removed local folder: ${localFolder.name}`);
+			}
+		}
+
+		for (const localFile of localStructure.files) {
+			const remoteFile = remoteStructure.files.find(f => f.name === localFile.name);
+			if (!remoteFile) {
+				fs.unlinkSync(localFile.path);
+				vscode.window.showWarningMessage(`Removed local file: ${localFile.name}`);
+			}
+		}
+	}
+}
+
+// This method is called when your extension is activated
+// Your extension is activated the very first time the command is executed
+
+/**
+ * @param {vscode.ExtensionContext} context
+ */
+function activate(context) {
+
+	// Use the console to output diagnostic information (console.log) and errors (console.error)
+	// This line of code will only be executed once when your extension is activated
+	console.log('Congratulations, your extension "powerschool-cpm" is now active!');
+
+	// Check if workspace contains ps_webroot directory and auto-sync if enabled
+	const workspaceFolders = vscode.workspace.workspaceFolders;
+	if (workspaceFolders && workspaceFolders.length > 0) {
+		const workspaceRoot = workspaceFolders[0].uri.fsPath;
+		const psWebrootPath = path.join(workspaceRoot, 'ps_webroot');
+		
+		// Check if auto-sync is enabled
+		const config = vscode.workspace.getConfiguration('powerschool-cpm');
+		const autoSync = config.get('autoSync');
+		
+		// Check if environment variables are available
+		const hasEnvConfig = process.env.PSTEST_URI && process.env.PSTEST_CLIENT_ID && process.env.PSTEST_CLIENT_SECRET;
+		
+		if (autoSync && hasEnvConfig && (fs.existsSync(psWebrootPath) || autoSync)) {
+			setTimeout(() => {
+				vscode.commands.executeCommand('powerschool-cpm.syncWithPowerSchool');
+			}, 1000); // Delay to ensure workspace is fully loaded
+		} else if (autoSync && !hasEnvConfig) {
+			vscode.window.showWarningMessage('PowerSchool CPM: Missing environment configuration in .env.local file');
+		}
+	}
+
+	// The command has been defined in the package.json file
+	// Now provide the implementation of the command with  registerCommand
+	// The commandId parameter must match the command field in package.json
+	const helloWorldDisposable = vscode.commands.registerCommand('powerschool-cpm.helloWorld', function () {
+		// The code you place here will be executed every time your command is executed
+
+		// Display a message box to the user
+		vscode.window.showInformationMessage('PowerSchool CPM! The new extension is working!');
+	});
+
+	// Register sync command
+	const syncDisposable = vscode.commands.registerCommand('powerschool-cpm.syncWithPowerSchool', async function () {
+		try {
+			const config = vscode.workspace.getConfiguration('powerschool-cpm');
+			const maxDepth = config.get('maxDepth');
+
+			const workspaceFolders = vscode.workspace.workspaceFolders;
+			if (!workspaceFolders || workspaceFolders.length === 0) {
+				vscode.window.showErrorMessage('No workspace folder found');
+				return;
+			}
+
+			// Initialize API with environment variables
+			let api;
+			try {
+				api = new PowerSchoolAPI();
+			} catch (error) {
+				vscode.window.showErrorMessage(`PowerSchool configuration error: ${error.message}`);
+				return;
+			}
+
+			const workspaceRoot = workspaceFolders[0].uri.fsPath;
+			const fsSync = new FileSystemSync(workspaceRoot);
+
+			vscode.window.showInformationMessage('Syncing with PowerSchool...');
+			
+			// Get folder tree from PowerSchool
+			const treeResponse = await api.getFolderTree('/', maxDepth);
+			
+			// Sync local directory
+			await fsSync.syncWithPowerSchool(treeResponse);
+			
+			vscode.window.showInformationMessage('PowerSchool sync completed successfully!');
+			
+		} catch (error) {
+			console.error('PowerSchool sync error:', error);
+			vscode.window.showErrorMessage(`PowerSchool sync failed: ${error.message}`);
+		}
+	});
+
+	context.subscriptions.push(helloWorldDisposable, syncDisposable);
+}
+
+// This method is called when your extension is deactivated
+function deactivate() {}
+
+module.exports = {
+	activate,
+	deactivate
+}

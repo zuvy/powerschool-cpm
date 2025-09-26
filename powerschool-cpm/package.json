@@ -1,0 +1,55 @@
+{
+  "name": "powerschool-cpm",
+  "displayName": "PowerSchool CPM",
+  "description": "Manage custom pages in PowerSchool",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.104.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "powerschool-cpm.syncWithPowerSchool",
+        "title": "PowerSchool CPM: Sync with PowerSchool"
+      }
+    ],
+    "configuration": {
+      "title": "PowerSchool CPM",
+      "properties": {
+        "powerschool-cpm.autoSync": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically sync ps_webroot directory when workspace opens"
+        },
+        "powerschool-cpm.maxDepth": {
+          "type": "number",
+          "default": 5,
+          "description": "Maximum folder depth to sync"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "pretest": "npm run lint",
+    "test": "vscode-test"
+  },
+  "dependencies": {
+    "dotenv": "^17.2.2"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.10",
+    "@types/node": "22.x",
+    "@types/vscode": "^1.104.0",
+    "@vscode/test-cli": "^0.0.11",
+    "@vscode/test-electron": "^2.5.2",
+    "eslint": "^9.34.0"
+  }
+}
