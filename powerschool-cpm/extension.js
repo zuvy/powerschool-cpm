@@ -2,6 +2,8 @@ const vscode = require('vscode');
 const fs = require('fs');
 const path = require('path');
 const https = require('https');
+const { getTemplatesByCategory, getTemplate } = require('./templates');
+const { getSnippetsByCategory } = require('./code_snippets');
 
 require('dotenv').config({ path: '.env.local' });
 
@@ -28,155 +30,7 @@ function generateMultipartData(fields, boundary) {
     return data;
 }
 
-// File templates for different PowerSchool page types
-const FILE_TEMPLATES = {
-    adminStudentPage: {
-        name: 'Admin Student Page',
-        extension: '.html',
-        content: `<!--
-TemplateName:Admin Student Page
--->
-<!DOCTYPE html>
-<html>
-<head>
-	<title>New Page</title>
-<!-- required scripts -->
-	~[wc:commonscripts] 
-<!-- Required style sheets: screen.css, and print.css -->
-	<link href="/images/css/screen.css" rel="stylesheet" media="screen">
-	<link href="/images/css/print.css" rel="stylesheet" media="print">
-</head> 
-<body> 
-	~[wc:admin_header_frame_css]
-	<!-- breadcrumb start -->
-		<a href="/admin/home.html" target="_top">Start Page</a> &gt; <a href="/admin/students/home.html?selectstudent=nosearch" target="_top">Student Selection</a> &gt; New Page
-	<!-- breadcrumb end -->
-~[wc:admin_navigation_frame_css]
-<!-- start of main menu and content -->
-~[wc:title_student_begin_css]New Page~[wc:title_student_end_css]
-<form action="/~[self.page]?frn=~(studentfrn)&changesSaved=true" method="POST">
-<!-- start of content area -->
-~[if.~(gpv.changesSaved)=true]<div class="feedback-confirm">~[text:psx.common.changes_recorded]</div>[/if]
-	<div class="box-round">
-		 <h2>Section Title Text Goes Here</h2>
-		 <p>
-		 	Your paragraph text goes here.
-		 </p>
-        <div class="button-row"><input type="hidden" name="ac" value="prim">~[submitbutton]</div>
-	</div>
-</form>
-<!-- end of content area -->
-	~[wc:admin_footer_frame_css]
-</body> 
-</html>`
-    },
-    adminGeneralPage: {
-        name: 'Admin General Page',
-        extension: '.html',
-        content: `<!--
-TemplateName:Admin General Page
--->
-<!DOCTYPE html>
-<html>
-<head>
-	<title>New Admin Page</title>
-<!-- required scripts -->
-	~[wc:commonscripts] 
-<!-- Required style sheets: screen.css, and print.css -->
-	<link href="/images/css/screen.css" rel="stylesheet" media="screen">
-	<link href="/images/css/print.css" rel="stylesheet" media="print">
-</head> 
-<body> 
-	~[wc:admin_header_frame_css]
-	<!-- breadcrumb start -->
-		<a href="/admin/home.html" target="_top">Start Page</a> &gt; New Admin Page
-	<!-- breadcrumb end -->
-~[wc:admin_navigation_frame_css]
-<!-- start of main menu and content -->
-~[wc:title_bar_begin_css]New Admin Page~[wc:title_bar_end_css]
-<form action="/~[self.page]?changesSaved=true" method="POST">
-<!-- start of content area -->
-~[if.~(gpv.changesSaved)=true]<div class="feedback-confirm">~[text:psx.common.changes_recorded]</div>[/if]
-	<div class="box-round">
-		 <h2>Admin Page Content</h2>
-		 <p>
-		 	Your admin page content goes here.
-		 </p>
-        <div class="button-row"><input type="hidden" name="ac" value="prim">~[submitbutton]</div>
-	</div>
-</form>
-<!-- end of content area -->
-	~[wc:admin_footer_frame_css]
-</body> 
-</html>`
-    },
-    publicPage: {
-        name: 'Public Page',
-        extension: '.html',
-        content: `<!--
-TemplateName:Public Page
--->
-<!DOCTYPE html>
-<html>
-<head>
-	<title>New Public Page</title>
-<!-- Required style sheets: screen.css, and print.css -->
-	<link href="/images/css/screen.css" rel="stylesheet" media="screen">
-	<link href="/images/css/print.css" rel="stylesheet" media="print">
-    ~[wc:commonscripts]
-</head> 
-<body> 
-	~[wc:public_header_frame_css]
-<!-- start of main content -->
-	<div class="box-round">
-		 <h1>New Public Page</h1>
-		 <p>
-		 	Your public page content goes here.
-		 </p>
-	</div>
-<!-- end of main content -->
-	~[wc:public_footer_frame_css]
-</body> 
-</html>`
-    },
-    javascript: {
-        name: 'JavaScript File',
-        extension: '.js',
-        content: `// PowerSchool Custom JavaScript
-// Created: ${new Date().toISOString().split('T')[0]}
 
-(function() {
-    'use strict';
-    
-    // Your JavaScript code goes here
-    console.log('PowerSchool custom script loaded');
-    
-    // Example: Wait for DOM ready
-    $(document).ready(function() {
-        // DOM manipulation code here
-    });
-    
-})();`
-    },
-    css: {
-        name: 'CSS Stylesheet',
-        extension: '.css',
-        content: `/* PowerSchool Custom CSS
- * Created: ${new Date().toISOString().split('T')[0]}
- */
-
-/* Custom styles go here */
-
-.custom-style {
-    /* Your custom styles */
-}
-
-/* Responsive design */
-@media (max-width: 768px) {
-    /* Mobile styles */
-}`
-    }
-};
 
 class PowerSchoolTreeItem extends vscode.TreeItem {
     constructor(label, collapsibleState, resourceUri, contextValue, remotePath, psApi, localRootPath) {
@@ -1243,10 +1097,6 @@ function activate(context) {
     });
     
     // Register commands
-    const helloCommand = vscode.commands.registerCommand('powerschool-cpm.helloWorld', () => {
-        vscode.window.showInformationMessage('Hello World from PowerSchool CPM!');
-    });
-
     const refreshCommand = vscode.commands.registerCommand('powerschool-cpm.refresh', () => {
         treeProvider.refresh();
         vscode.window.showInformationMessage('PowerSchool file tree refreshed!');
@@ -1264,99 +1114,55 @@ function activate(context) {
         await treeProvider.publishCurrentFile();
     });
     
-    const debugUploadCommand = vscode.commands.registerCommand('powerschool-cpm.debugUpload', async () => {
-        const activeEditor = vscode.window.activeTextEditor;
-        if (!activeEditor) {
-            vscode.window.showWarningMessage('No active file to debug.');
-            return;
-        }
-        
-        try {
-            const filePath = activeEditor.document.fileName;
-            const relativePath = path.relative(psWebrootPath, filePath);
-            const remotePath = '/' + relativePath.replace(/\\/g, '/');
-            
-            vscode.window.showInformationMessage('Running comprehensive upload debug analysis...');
-            
-            console.log('🔍 UPLOAD DEBUG ANALYSIS');
-            console.log('==========================');
-            console.log(`Local file: ${filePath}`);
-            console.log(`Remote path: ${remotePath}`);
-            console.log(`PS Server: ${api.baseUrl}`);
-            
-            // Check current session
-            const sessionValid = await api.checkSession();
-            console.log(`Session valid: ${sessionValid}`);
-            console.log(`Session cookies: ${api.cookies.size}`);
-            
-            // Test upload endpoints
-            console.log('\\nTesting upload endpoints...');
-            await api.testUploadEndpoint();
-            
-            // Read local file
-            const localContent = fs.readFileSync(filePath, 'utf8');
-            console.log(`\\nLocal content length: ${localContent.length}`);
-            
-            // Download current remote content
-            console.log('\\nDownloading current remote content...');
-            const remoteContent = await api.downloadFileContent(remotePath);
-            console.log(`Remote content length: ${remoteContent.length}`);
-            
-            // Compare
-            const matches = localContent === remoteContent;
-            console.log(`Content matches: ${matches}`);
-            
-            if (!matches) {
-                const firstDiff = findFirstDifference(localContent, remoteContent);
-                console.log(`First difference at character: ${firstDiff}`);
-                console.log(`Local around diff: "${localContent.substring(Math.max(0, firstDiff-20), firstDiff+20)}"`);
-                console.log(`Remote around diff: "${remoteContent.substring(Math.max(0, firstDiff-20), firstDiff+20)}"`);
-            }
-            
-            vscode.window.showInformationMessage('Debug analysis complete. Check VS Code Developer Console for details.');
-            
-        } catch (error) {
-            console.error('Debug analysis failed:', error);
-            vscode.window.showErrorMessage(`Debug analysis failed: ${error.message}`);
-        }
-    });
-
-    const testEndpointsCommand = vscode.commands.registerCommand('powerschool-cpm.testEndpoints', async () => {
-        try {
-            vscode.window.showInformationMessage('Testing PowerSchool upload endpoints...');
-            console.log('🔍 TESTING POWERSCHOOL UPLOAD ENDPOINTS');
-            console.log('========================================');
-            await api.testUploadEndpoint();
-            vscode.window.showInformationMessage('Endpoint testing complete. Check VS Code Developer Console for results.');
-        } catch (error) {
-            console.error('Endpoint testing failed:', error);
-            vscode.window.showErrorMessage(`Endpoint testing failed: ${error.message}`);
-        }
-    });
-
     const createNewFileCommand = vscode.commands.registerCommand('powerschool-cpm.createNewFile', async () => {
         try {
-            // Show quick pick for file type
-            const templateOptions = Object.keys(FILE_TEMPLATES).map(key => ({
-                label: FILE_TEMPLATES[key].name,
-                description: `Create a new ${FILE_TEMPLATES[key].name.toLowerCase()}`,
-                key: key
-            }));
+            // Get templates organized by category
+            const templatesByCategory = getTemplatesByCategory();
             
-            const selectedTemplate = await vscode.window.showQuickPick(templateOptions, {
-                placeHolder: 'Select the type of PowerSchool file to create'
+            // Create organized template options with category separators
+            const templateOptions = [];
+            
+            Object.keys(templatesByCategory).forEach(category => {
+                // Add category header
+                templateOptions.push({
+                    label: `── ${category} Templates ──`,
+                    description: '',
+                    kind: vscode.QuickPickItemKind.Separator
+                });
+                
+                // Add templates in this category
+                templatesByCategory[category].forEach(template => {
+                    templateOptions.push({
+                        label: template.name,
+                        description: template.description,
+                        detail: `${template.extension} • ${category}`,
+                        key: template.key
+                    });
+                });
             });
             
-            if (!selectedTemplate) return;
+            const selectedTemplate = await vscode.window.showQuickPick(templateOptions, {
+                placeHolder: 'Select the type of PowerSchool file to create',
+                matchOnDescription: true,
+                matchOnDetail: true
+            });
+            
+            if (!selectedTemplate || !selectedTemplate.key) return;
+            
+            const template = getTemplate(selectedTemplate.key);
+            if (!template) {
+                vscode.window.showErrorMessage('Template not found');
+                return;
+            }
             
             // Get file name from user
             const fileName = await vscode.window.showInputBox({
                 prompt: `Enter name for new ${selectedTemplate.label}`,
-                placeHolder: `my-new-page${FILE_TEMPLATES[selectedTemplate.key].extension}`,
+                placeHolder: `my-new-page${template.extension}`,
                 validateInput: (value) => {
                     if (!value) return 'File name is required';
-                    if (!value.endsWith(FILE_TEMPLATES[selectedTemplate.key].extension)) {
-                        return `File name must end with ${FILE_TEMPLATES[selectedTemplate.key].extension}`;
+                    if (!value.endsWith(template.extension)) {
+                        return `File name must end with ${template.extension}`;
                     }
                     return null;
                 }
@@ -1408,7 +1214,6 @@ function activate(context) {
             }
             
             // Write template content to local file
-            const template = FILE_TEMPLATES[selectedTemplate.key];
             fs.writeFileSync(localFilePath, template.content);
             
             // Open the file in editor
@@ -1423,7 +1228,7 @@ function activate(context) {
         }
     });
     
-    const publishAnyFileCommand = vscode.commands.registerCommand('powerschool-cpm.publishAnyFile', async () => {
+    const publishNewFileCommand = vscode.commands.registerCommand('powerschool-cpm.publishNewFile', async () => {
         try {
             const activeEditor = vscode.window.activeTextEditor;
             if (!activeEditor) {
@@ -1570,75 +1375,200 @@ function activate(context) {
         }
     });
 
-    const showFullPathsCommand = vscode.commands.registerCommand('powerschool-cpm.showFullPaths', async () => {
+
+
+    const insertSnippetCommand = vscode.commands.registerCommand('powerschool-cpm.insertSnippet', async () => {
         try {
-            vscode.window.showInformationMessage('Scanning PowerSchool directory structure... This may take a moment.');
-            console.log('🌲 Starting complete PowerSchool directory scan...');
-            
-            const structure = await api.getCompleteDirectoryStructure('/', 3);
-            
-            // Show results in output channel for easy viewing
-            const outputChannel = vscode.window.createOutputChannel('PowerSchool Directory Structure');
-            outputChannel.clear();
-            outputChannel.show(true);
-            
-            outputChannel.appendLine('========================================');
-            outputChannel.appendLine('POWERSCHOOL COMPLETE DIRECTORY STRUCTURE');
-            outputChannel.appendLine('========================================');
-            outputChannel.appendLine('');
-            outputChannel.appendLine(`Total Folders: ${structure.totalFolders}`);
-            outputChannel.appendLine(`Total Files: ${structure.totalFiles}`);
-            outputChannel.appendLine('');
-            
-            outputChannel.appendLine('📁 FOLDERS:');
-            outputChannel.appendLine('----------');
-            for (const folder of structure.folders) {
-                const indent = '  '.repeat(folder.depth);
-                outputChannel.appendLine(`${indent}📂 ${folder.path} (${folder.name})`);
+            const editor = vscode.window.activeTextEditor;
+            if (!editor) {
+                vscode.window.showErrorMessage('No active text editor found. Please open a file first.');
+                return;
             }
+
+            // Get snippets organized by category
+            const snippetsByCategory = getSnippetsByCategory();
             
-            outputChannel.appendLine('');
-            outputChannel.appendLine('📄 FILES:');
-            outputChannel.appendLine('--------');
-            for (const file of structure.files) {
-                outputChannel.appendLine(`📄 ${file.path}`);
-                outputChannel.appendLine(`   └─ Folder: ${file.folderPath}`);
-                outputChannel.appendLine(`   └─ Name: ${file.name}`);
-                outputChannel.appendLine('');
+            // Create organized snippet options with category separators
+            const snippetOptions = [];
+            
+            Object.keys(snippetsByCategory).forEach(category => {
+                // Add category header
+                snippetOptions.push({
+                    label: `── ${category} Snippets ──`,
+                    description: '',
+                    kind: vscode.QuickPickItemKind.Separator
+                });
+                
+                // Add snippets in this category
+                snippetsByCategory[category].forEach(snippetInfo => {
+                    // Get the full snippet data using the key
+                    const { getSnippet } = require('./code_snippets');
+                    const fullSnippet = getSnippet(snippetInfo.key);
+                    
+                    if (fullSnippet && fullSnippet.content) {
+                        const preview = fullSnippet.content.substring(0, 100) + (fullSnippet.content.length > 100 ? '...' : '');
+                        
+                        snippetOptions.push({
+                            label: snippetInfo.name,
+                            description: snippetInfo.description,
+                            detail: preview,
+                            snippetKey: snippetInfo.key,
+                            snippetContent: fullSnippet.content
+                        });
+                    }
+                });
+            });
+
+            // Show snippet picker
+            const selectedSnippet = await vscode.window.showQuickPick(snippetOptions, {
+                placeHolder: 'Select a PowerSchool code snippet to insert',
+                matchOnDescription: true,
+                matchOnDetail: true
+            });
+
+            if (!selectedSnippet || selectedSnippet.kind === vscode.QuickPickItemKind.Separator) {
+                return; // User cancelled or selected a separator
             }
-            
-            // Also search for the specific file mentioned
-            const generalDemographicsFiles = structure.files.filter(f => 
-                f.name.toLowerCase().includes('generaldemographics') || 
-                f.path.toLowerCase().includes('generaldemographics')
-            );
-            
-            if (generalDemographicsFiles.length > 0) {
-                outputChannel.appendLine('🎯 GENERALDEMOGRAPHICS FILES FOUND:');
-                outputChannel.appendLine('================================');
-                for (const file of generalDemographicsFiles) {
-                    outputChannel.appendLine(`✅ ${file.path}`);
-                    outputChannel.appendLine(`   └─ Use this exact path when publishing: ${file.path}`);
-                    outputChannel.appendLine('');
-                }
-            }
-            
-            outputChannel.appendLine('📋 HOW TO USE THESE PATHS:');
-            outputChannel.appendLine('========================');
-            outputChannel.appendLine('1. When creating new files, use any folder path shown above');
-            outputChannel.appendLine('2. When publishing files, use the EXACT file path shown above');
-            outputChannel.appendLine('3. Example: /admin/students/generaldemographics.html');
-            outputChannel.appendLine('4. Make sure your local folder structure matches the PowerSchool structure');
-            
-            vscode.window.showInformationMessage(`Directory scan complete! Found ${structure.totalFiles} files in ${structure.totalFolders} folders. Check the "PowerSchool Directory Structure" output panel for details.`);
-            
+
+            // Insert the snippet at cursor position
+            const position = editor.selection.active;
+            await editor.edit(editBuilder => {
+                editBuilder.insert(position, selectedSnippet.snippetContent);
+            });
+
+            vscode.window.showInformationMessage(`Inserted "${selectedSnippet.label}" snippet at cursor position.`);
+
         } catch (error) {
-            console.error('Failed to scan directory structure:', error);
-            vscode.window.showErrorMessage(`Failed to scan PowerSchool structure: ${error.message}`);
+            console.error('Failed to insert snippet:', error);
+            vscode.window.showErrorMessage(`Failed to insert snippet: ${error.message}`);
         }
     });
 
-    context.subscriptions.push(treeView, helloCommand, refreshCommand, downloadCommand, publishCommand, publishCurrentCommand, debugUploadCommand, testEndpointsCommand, createNewFileCommand, publishAnyFileCommand, showFullPathsCommand);
+    // Register individual snippet commands
+    const { getSnippet } = require('./code_snippets');
+    const snippetKeys = ['box_round', 'calendar', 'dialog', 'dynamic_tabs', 'jquery_function', 'form', 'table', 'tlist_sql', 'collapsible_box', 'if_block', 'student_info', 'breadcrumb'];
+    
+    const snippetCommands = [];
+    snippetKeys.forEach(key => {
+        const command = vscode.commands.registerCommand(`powerschool-cpm.insertSnippet.${key}`, async () => {
+            try {
+                const editor = vscode.window.activeTextEditor;
+                if (!editor) {
+                    vscode.window.showErrorMessage('No active text editor found. Please open a file first.');
+                    return;
+                }
+
+                const snippet = getSnippet(key);
+                if (!snippet || !snippet.content) {
+                    vscode.window.showErrorMessage(`Snippet '${key}' not found or has no content.`);
+                    return;
+                }
+
+                // Insert the snippet at cursor position
+                const position = editor.selection.active;
+                await editor.edit(editBuilder => {
+                    editBuilder.insert(position, snippet.content);
+                });
+
+                vscode.window.showInformationMessage(`Inserted "${snippet.name}" snippet at cursor position.`);
+
+            } catch (error) {
+                console.error(`Failed to insert snippet ${key}:`, error);
+                vscode.window.showErrorMessage(`Failed to insert snippet: ${error.message}`);
+            }
+        });
+        snippetCommands.push(command);
+    });
+
+    // Register individual template commands
+    const templateKeys = ['admin', 'adminStudentPage', 'teacher', 'teacherBackpack', 'parentPortal'];
+    
+    const templateCommands = [];
+    templateKeys.forEach(key => {
+        const command = vscode.commands.registerCommand(`powerschool-cpm.createTemplate.${key}`, async () => {
+            try {
+                const template = getTemplate(key);
+                if (!template) {
+                    vscode.window.showErrorMessage(`Template '${key}' not found.`);
+                    return;
+                }
+
+                // Get file name from user
+                const fileName = await vscode.window.showInputBox({
+                    prompt: `Enter name for new ${template.name}`,
+                    placeHolder: `my-new-${key}${template.extension}`,
+                    validateInput: (value) => {
+                        if (!value) return 'File name is required';
+                        if (!value.endsWith(template.extension)) {
+                            return `File name must end with ${template.extension}`;
+                        }
+                        return null;
+                    }
+                });
+                
+                if (!fileName) return;
+
+                // Get target directory
+                const pathOptions = [
+                    { label: '/admin', description: 'Admin pages (admin folder)' },
+                    { label: '/admin/students', description: 'Student admin pages' },
+                    { label: '/admin/teachers', description: 'Teacher admin pages' },
+                    { label: '/admin/schools', description: 'School admin pages' },
+                    { label: '/public', description: 'Public pages' },
+                    { label: '/images/css', description: 'CSS stylesheets' },
+                    { label: '/images/javascript', description: 'JavaScript files' },
+                    { label: 'Custom path...', description: 'Enter a custom PowerSchool path' }
+                ];
+                
+                const selectedPath = await vscode.window.showQuickPick(pathOptions, {
+                    placeHolder: 'Select where to create the file in PowerSchool'
+                });
+                
+                if (!selectedPath) return;
+                
+                let targetPath = selectedPath.label;
+                if (selectedPath.label === 'Custom path...') {
+                    const customPath = await vscode.window.showInputBox({
+                        prompt: 'Enter PowerSchool path (e.g., /admin/custom)',
+                        placeHolder: '/admin/custom',
+                        validateInput: (value) => {
+                            if (!value) return 'Path is required';
+                            if (!value.startsWith('/')) return 'Path must start with /';
+                            return null;
+                        }
+                    });
+                    if (!customPath) return;
+                    targetPath = customPath;
+                }
+                
+                // Create local file path
+                const remotePath = `${targetPath}/${fileName}`;
+                const localFilePath = path.join(psWebrootPath, remotePath.replace(/^\/+/g, ''));
+                
+                // Create local directory if it doesn't exist
+                const localDir = path.dirname(localFilePath);
+                if (!fs.existsSync(localDir)) {
+                    fs.mkdirSync(localDir, { recursive: true });
+                }
+                
+                // Write template content to local file
+                fs.writeFileSync(localFilePath, template.content);
+                
+                // Open the file in editor
+                const document = await vscode.workspace.openTextDocument(localFilePath);
+                await vscode.window.showTextDocument(document);
+                
+                vscode.window.showInformationMessage(`Created ${fileName} from ${template.name} template. Edit and use "Publish to PowerSchool" when ready.`);
+
+            } catch (error) {
+                console.error(`Failed to create template ${key}:`, error);
+                vscode.window.showErrorMessage(`Failed to create template: ${error.message}`);
+            }
+        });
+        templateCommands.push(command);
+    });
+
+    context.subscriptions.push(treeView, refreshCommand, downloadCommand, publishCommand, publishCurrentCommand, createNewFileCommand, publishNewFileCommand, insertSnippetCommand, ...snippetCommands, ...templateCommands);
     
     console.log('🌲 PowerSchool CPM tree view initialized!');
     vscode.window.showInformationMessage('PowerSchool CPM: Use the PowerSchool Explorer panel to browse and download files!');
