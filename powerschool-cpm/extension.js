@@ -16,6 +16,18 @@ function findFirstDifference(str1, str2) {
     return minLength; // Strings are identical up to the shorter length
 }
 
+// Helper function to generate multipart form data
+function generateMultipartData(fields, boundary) {
+    let data = '';
+    for (const [name, value] of Object.entries(fields)) {
+        data += `--${boundary}\r\n`;
+        data += `Content-Disposition: form-data; name="${name}"\r\n\r\n`;
+        data += `${value}\r\n`;
+    }
+    data += `--${boundary}--\r\n`;
+    return data;
+}
+
 class PowerSchoolTreeItem extends vscode.TreeItem {
     constructor(label, collapsibleState, resourceUri, contextValue, remotePath, psApi, localRootPath) {
         super(label, collapsibleState);
@@ -589,41 +601,48 @@ class PowerSchoolAPI {
     async uploadFileContent(filePath, content) {
         await this.ensureAuthenticated();
         
-        // Enhanced debugging for upload
-        console.log('🔍 UPLOAD DEBUG INFO:');
+        console.log('🔍 UPLOAD DEBUG INFO (CORRECT PowerSchool API):');
         console.log(`   File path: ${filePath}`);
         console.log(`   Content length: ${content.length} characters`);
         console.log(`   Content preview: ${content.substring(0, 100)}${content.length > 100 ? '...' : ''}`);
         
-        // Try the original method first, then fallback to web interface method
-        try {
-            return await this.uploadViaAPI(filePath, content);
-        } catch (error) {
-            console.log('   API upload failed, trying web interface method...');
-            return await this.uploadViaWebInterface(filePath, content);
-        }
-    }
-
-    async uploadViaAPI(filePath, content) {
-        const postData = new URLSearchParams({
-            path: filePath,
-            customText: content,
-            action: 'save'
-        }).toString();
+        // First get the file info to get customContentId if it exists
+        const fileInfo = await this.downloadFileInfo(filePath);
         
-        console.log(`   POST data length: ${postData.length} bytes`);
+        // Generate key path from file path (remove leading slash and replace / with .)
+        const keyPath = filePath.replace(/^\/+/, '').replace(/\//g, '.').replace(/\.(html|htm|js|css|txt)$/i, '');
+        
+        // Generate boundary for multipart data
+        const boundary = `----formdata-node-${Math.random().toString(36).substr(2, 16)}`;
+        
+        // Create multipart form data according to PowerSchool API spec
+        const formFields = {
+            'customContentId': fileInfo.activeCustomContentId || 0,
+            'customContent': content,
+            'customContentPath': filePath,
+            'keyPath': keyPath,
+            'keyValueMap': 'null',
+            'publish': 'true'  // Publish directly instead of saving as draft
+        };
+        
+        const multipartData = generateMultipartData(formFields, boundary);
+        
+        console.log(`   Using boundary: ${boundary}`);
+        console.log(`   Custom content ID: ${formFields.customContentId}`);
+        console.log(`   Key path: ${keyPath}`);
+        console.log(`   Multipart data length: ${multipartData.length} bytes`);
         
         const options = {
             hostname: new URL(this.baseUrl).hostname,
             port: 443,
-            path: '/ws/cpm/updatetext',
+            path: '/ws/cpm/customPageContent',
             method: 'POST',
             headers: {
                 'Referer': `${this.baseUrl}/admin/customization/home.html`,
                 'Accept': 'application/json',
                 'User-Agent': 'PowerSchool-CPM-VSCode-Extension/1.0',
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'Content-Length': Buffer.byteLength(postData),
+                'Content-Type': `multipart/form-data; boundary=${boundary}`,
+                'Content-Length': Buffer.byteLength(multipartData),
                 'Cookie': this.getCookieHeader()
             }
         };
@@ -638,155 +657,56 @@ class PowerSchoolAPI {
                     data += chunk;
                 });
                 res.on('end', () => {
-                    console.log('📤 API UPLOAD RESPONSE:');
+                    console.log('📤 PowerSchool CPM API RESPONSE:');
                     console.log(`   Status: ${res.statusCode}`);
                     console.log(`   Headers:`, res.headers);
                     console.log(`   Raw response: ${data}`);
-                    
-                    // Check if response is XML (PowerSchool error page)
-                    if (data.trim().startsWith('<?xml') || data.trim().startsWith('<html')) {
-                        console.log('   ❌ Received XML/HTML response instead of JSON');
-                        console.log('   This usually means the API endpoint is incorrect or not available');
-                        
-                        // Try to extract error message from XML/HTML
-                        let errorMessage = 'PowerSchool API returned an error page instead of JSON response';
-                        if (data.includes('<title>')) {
-                            const titleMatch = data.match(/<title>(.*?)<\/title>/i);
-                            if (titleMatch) {
-                                errorMessage += ` (Page: ${titleMatch[1]})`;
-                            }
-                        }
-                        
-                        reject(new Error(errorMessage));
-                        return;
-                    }
                     
                     try {
                         const response = JSON.parse(data);
                         console.log(`   Parsed response:`, response);
                         
                         if (res.statusCode === 200) {
-                            console.log('   ✅ API upload request completed successfully');
-                            resolve(response);
+                            console.log('   ✅ PowerSchool upload completed successfully');
+                            if (response.returnMessage && response.returnMessage.includes('successfully')) {
+                                console.log(`   ✅ Success message: ${response.returnMessage}`);
+                                resolve(response);
+                            } else {
+                                console.log(`   ⚠️  Unexpected response: ${response.returnMessage}`);
+                                resolve(response);
+                            }
                         } else {
-                            console.log(`   ❌ API upload failed with status ${res.statusCode}`);
-                            reject(new Error(`API upload failed ${res.statusCode}: ${response.message || data}`));
+                            console.log(`   ❌ Upload failed with status ${res.statusCode}`);
+                            reject(new Error(`Upload failed ${res.statusCode}: ${response.returnMessage || data}`));
                         }
                     } catch (parseError) {
-                        console.log(`   ❌ Failed to parse API response JSON: ${parseError.message}`);
+                        console.log(`   ❌ Failed to parse response JSON: ${parseError.message}`);
                         console.log(`   Raw data: ${data.substring(0, 500)}${data.length > 500 ? '...' : ''}`);
-                        reject(new Error(`PowerSchool API returned invalid JSON response. API endpoint may not be available.`));
+                        reject(new Error(`PowerSchool returned invalid JSON response: ${parseError.message}`));
                     }
                 });
             });
             
             req.on('error', (error) => {
-                console.log(`   ❌ API request error: ${error.message}`);
+                console.log(`   ❌ Request error: ${error.message}`);
                 reject(error);
             });
             
-            req.write(postData);
+            req.write(multipartData);
             req.end();
         });
     }
 
-    async uploadViaWebInterface(filePath, content) {
-        console.log('🌐 TRYING WEB INTERFACE UPLOAD:');
-        console.log('   Using form-based upload like the web interface');
-        
-        // First, get the editing page to see how PowerSchool expects the data
-        const editPageResponse = await this.getEditPage(filePath);
-        console.log(`   Edit page status: ${editPageResponse.status}`);
-        
-        // Use the same format as the PowerSchool web interface
-        const postData = new URLSearchParams({
-            'customText': content,
-            'path': filePath,
-            'submitAction': 'save'  // Different action parameter
-        }).toString();
-        
-        const options = {
-            hostname: new URL(this.baseUrl).hostname,
-            port: 443,
-            path: '/admin/customization/home.html',  // Use the main page
-            method: 'POST',
-            headers: {
-                'Referer': `${this.baseUrl}/admin/customization/home.html`,
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                'User-Agent': 'PowerSchool-CPM-VSCode-Extension/1.0',
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'Content-Length': Buffer.byteLength(postData),
-                'Cookie': this.getCookieHeader()
-            }
-        };
-        
-        console.log(`   Web request URL: https://${options.hostname}${options.path}`);
-        
-        return new Promise((resolve, reject) => {
-            const req = https.request(options, (res) => {
-                let data = '';
-                res.on('data', (chunk) => {
-                    data += chunk;
-                });
-                res.on('end', () => {
-                    console.log('📤 WEB INTERFACE RESPONSE:');
-                    console.log(`   Status: ${res.statusCode}`);
-                    console.log(`   Response length: ${data.length}`);
-                    
-                    // For web interface, success might be a redirect or HTML page
-                    if (res.statusCode === 200 || res.statusCode === 302) {
-                        console.log('   ✅ Web interface upload appears successful');
-                        resolve({ success: true, method: 'web' });
-                    } else {
-                        console.log(`   ❌ Web interface upload failed with status ${res.statusCode}`);
-                        reject(new Error(`Web interface upload failed: ${res.statusCode}`));
-                    }
-                });
-            });
-            
-            req.on('error', (error) => {
-                console.log(`   ❌ Web interface request error: ${error.message}`);
-                reject(error);
-            });
-            
-            req.write(postData);
-            req.end();
-        });
-    }
 
-    async getEditPage(filePath) {
-        const queryParams = new URLSearchParams({
-            action: 'edit',
-            path: filePath
-        });
-        
-        const options = {
-            hostname: new URL(this.baseUrl).hostname,
-            port: 443,
-            path: `/admin/customization/home.html?${queryParams.toString()}`,
-            method: 'GET',
-            headers: {
-                'User-Agent': 'PowerSchool-CPM-VSCode-Extension/1.0',
-                'Cookie': this.getCookieHeader()
-            }
-        };
-        
-        return new Promise((resolve) => {
-            const req = https.request(options, (res) => {
-                resolve({ status: res.statusCode });
-            });
-            req.on('error', () => {
-                resolve({ status: 'error' });
-            });
-            req.end();
-        });
-    }
     
     async verifyUpload(filePath) {
         console.log('🔍 VERIFYING UPLOAD:');
         console.log(`   Re-downloading ${filePath} to verify changes...`);
         
         try {
+            // Wait a moment for PowerSchool to process the upload
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
             const verifyContent = await this.downloadFileContent(filePath);
             console.log(`   Verification content length: ${verifyContent.length}`);
             console.log(`   Verification preview: ${verifyContent.substring(0, 200)}${verifyContent.length > 200 ? '...' : ''}`);
@@ -833,6 +753,52 @@ class PowerSchoolAPI {
                             resolve(content);
                         } else {
                             reject(new Error(`Failed to download file: ${response.message || data}`));
+                        }
+                    } catch (error) {
+                        reject(error);
+                    }
+                });
+            });
+            req.on('error', reject);
+            req.end();
+        });
+    }
+
+    // Get file info including custom content ID for uploads
+    async downloadFileInfo(filePath) {
+        const queryParams = new URLSearchParams({
+            LoadFolderInfo: 'false',
+            path: filePath
+        });
+        
+        await this.ensureAuthenticated();
+        
+        const options = {
+            hostname: new URL(this.baseUrl).hostname,
+            port: 443,
+            path: `/ws/cpm/builtintext?${queryParams.toString()}`,
+            method: 'GET',
+            headers: {
+                'Referer': `${this.baseUrl}/admin/customization/home.html`,
+                'Accept': 'application/json',
+                'User-Agent': 'PowerSchool-CPM-VSCode-Extension/1.0',
+                'Cookie': this.getCookieHeader()
+            }
+        };
+
+        return new Promise((resolve, reject) => {
+            const req = https.request(options, (res) => {
+                let data = '';
+                res.on('data', (chunk) => {
+                    data += chunk;
+                });
+                res.on('end', () => {
+                    try {
+                        const response = JSON.parse(data);
+                        if (res.statusCode === 200) {
+                            resolve(response);
+                        } else {
+                            reject(new Error(`Failed to get file info: ${response.message || data}`));
                         }
                     } catch (error) {
                         reject(error);
