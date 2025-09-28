@@ -16,10 +16,75 @@
   "contributes": {
     "commands": [
       {
-        "command": "powerschool-cpm.syncWithPowerSchool",
-        "title": "PowerSchool CPM: Sync with PowerSchool"
+        "command": "powerschool-cpm.helloWorld",
+        "title": "Hello World"
+      },
+      {
+        "command": "powerschool-cpm.refresh",
+        "title": "Refresh",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "powerschool-cpm.downloadFile",
+        "title": "Download File"
+      },
+      {
+        "command": "powerschool-cpm.publishFile",
+        "title": "Publish to PowerSchool",
+        "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "powerschool-cpm.publishCurrentFile",
+        "title": "PowerSchool CPM: Publish Current File"
+      },
+      {
+        "command": "powerschool-cpm.debugUpload",
+        "title": "PowerSchool CPM: Debug Upload Issue"
+      },
+      {
+        "command": "powerschool-cpm.testEndpoints",
+        "title": "PowerSchool CPM: Test Upload Endpoints",
+        "icon": "$(search)"
       }
     ],
+    "views": {
+      "explorer": [
+        {
+          "id": "powerschool-cpm-explorer",
+          "name": "PowerSchool Files",
+          "when": "workspaceFolderCount > 0"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "powerschool-cpm.refresh",
+          "when": "view == powerschool-cpm-explorer",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "powerschool-cpm.publishFile",
+          "when": "view == powerschool-cpm-explorer && viewItem == file",
+          "group": "inline"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "powerschool-cpm.publishCurrentFile",
+          "when": "editorIsOpen"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "powerschool-cpm.publishCurrentFile",
+          "when": "resourceExtname =~ /\\.(html|htm|js|css|txt)$/",
+          "group": "powerschool"
+        }
+      ]
+    },
     "configuration": {
       "title": "PowerSchool CPM",
       "properties": {
