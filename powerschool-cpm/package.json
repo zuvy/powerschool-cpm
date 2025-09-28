@@ -45,6 +45,21 @@
         "command": "powerschool-cpm.testEndpoints",
         "title": "PowerSchool CPM: Test Upload Endpoints",
         "icon": "$(search)"
+      },
+      {
+        "command": "powerschool-cpm.createNewFile",
+        "title": "PowerSchool CPM: Create New File",
+        "icon": "$(new-file)"
+      },
+      {
+        "command": "powerschool-cpm.publishAnyFile",
+        "title": "PowerSchool CPM: Publish Any File to PowerSchool",
+        "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "powerschool-cpm.showFullPaths",
+        "title": "PowerSchool CPM: Show Full Directory Structure",
+        "icon": "$(list-tree)"
       }
     ],
     "views": {
@@ -62,6 +77,11 @@
           "command": "powerschool-cpm.refresh",
           "when": "view == powerschool-cpm-explorer",
           "group": "navigation"
+        },
+        {
+          "command": "powerschool-cpm.createNewFile",
+          "when": "view == powerschool-cpm-explorer",
+          "group": "navigation"
         }
       ],
       "view/item/context": [
@@ -75,11 +95,26 @@
         {
           "command": "powerschool-cpm.publishCurrentFile",
           "when": "editorIsOpen"
+        },
+        {
+          "command": "powerschool-cpm.createNewFile"
+        },
+        {
+          "command": "powerschool-cpm.publishAnyFile",
+          "when": "editorIsOpen"
+        },
+        {
+          "command": "powerschool-cpm.showFullPaths"
         }
       ],
       "editor/context": [
         {
           "command": "powerschool-cpm.publishCurrentFile",
+          "when": "resourceExtname =~ /\\.(html|htm|js|css|txt)$/",
+          "group": "powerschool"
+        },
+        {
+          "command": "powerschool-cpm.publishAnyFile",
           "when": "resourceExtname =~ /\\.(html|htm|js|css|txt)$/",
           "group": "powerschool"
         }

@@ -28,6 +28,156 @@ function generateMultipartData(fields, boundary) {
     return data;
 }
 
+// File templates for different PowerSchool page types
+const FILE_TEMPLATES = {
+    adminStudentPage: {
+        name: 'Admin Student Page',
+        extension: '.html',
+        content: `<!--
+TemplateName:Admin Student Page
+-->
+<!DOCTYPE html>
+<html>
+<head>
+	<title>New Page</title>
+<!-- required scripts -->
+	~[wc:commonscripts] 
+<!-- Required style sheets: screen.css, and print.css -->
+	<link href="/images/css/screen.css" rel="stylesheet" media="screen">
+	<link href="/images/css/print.css" rel="stylesheet" media="print">
+</head> 
+<body> 
+	~[wc:admin_header_frame_css]
+	<!-- breadcrumb start -->
+		<a href="/admin/home.html" target="_top">Start Page</a> &gt; <a href="/admin/students/home.html?selectstudent=nosearch" target="_top">Student Selection</a> &gt; New Page
+	<!-- breadcrumb end -->
+~[wc:admin_navigation_frame_css]
+<!-- start of main menu and content -->
+~[wc:title_student_begin_css]New Page~[wc:title_student_end_css]
+<form action="/~[self.page]?frn=~(studentfrn)&changesSaved=true" method="POST">
+<!-- start of content area -->
+~[if.~(gpv.changesSaved)=true]<div class="feedback-confirm">~[text:psx.common.changes_recorded]</div>[/if]
+	<div class="box-round">
+		 <h2>Section Title Text Goes Here</h2>
+		 <p>
+		 	Your paragraph text goes here.
+		 </p>
+        <div class="button-row"><input type="hidden" name="ac" value="prim">~[submitbutton]</div>
+	</div>
+</form>
+<!-- end of content area -->
+	~[wc:admin_footer_frame_css]
+</body> 
+</html>`
+    },
+    adminGeneralPage: {
+        name: 'Admin General Page',
+        extension: '.html',
+        content: `<!--
+TemplateName:Admin General Page
+-->
+<!DOCTYPE html>
+<html>
+<head>
+	<title>New Admin Page</title>
+<!-- required scripts -->
+	~[wc:commonscripts] 
+<!-- Required style sheets: screen.css, and print.css -->
+	<link href="/images/css/screen.css" rel="stylesheet" media="screen">
+	<link href="/images/css/print.css" rel="stylesheet" media="print">
+</head> 
+<body> 
+	~[wc:admin_header_frame_css]
+	<!-- breadcrumb start -->
+		<a href="/admin/home.html" target="_top">Start Page</a> &gt; New Admin Page
+	<!-- breadcrumb end -->
+~[wc:admin_navigation_frame_css]
+<!-- start of main menu and content -->
+~[wc:title_bar_begin_css]New Admin Page~[wc:title_bar_end_css]
+<form action="/~[self.page]?changesSaved=true" method="POST">
+<!-- start of content area -->
+~[if.~(gpv.changesSaved)=true]<div class="feedback-confirm">~[text:psx.common.changes_recorded]</div>[/if]
+	<div class="box-round">
+		 <h2>Admin Page Content</h2>
+		 <p>
+		 	Your admin page content goes here.
+		 </p>
+        <div class="button-row"><input type="hidden" name="ac" value="prim">~[submitbutton]</div>
+	</div>
+</form>
+<!-- end of content area -->
+	~[wc:admin_footer_frame_css]
+</body> 
+</html>`
+    },
+    publicPage: {
+        name: 'Public Page',
+        extension: '.html',
+        content: `<!--
+TemplateName:Public Page
+-->
+<!DOCTYPE html>
+<html>
+<head>
+	<title>New Public Page</title>
+<!-- Required style sheets: screen.css, and print.css -->
+	<link href="/images/css/screen.css" rel="stylesheet" media="screen">
+	<link href="/images/css/print.css" rel="stylesheet" media="print">
+    ~[wc:commonscripts]
+</head> 
+<body> 
+	~[wc:public_header_frame_css]
+<!-- start of main content -->
+	<div class="box-round">
+		 <h1>New Public Page</h1>
+		 <p>
+		 	Your public page content goes here.
+		 </p>
+	</div>
+<!-- end of main content -->
+	~[wc:public_footer_frame_css]
+</body> 
+</html>`
+    },
+    javascript: {
+        name: 'JavaScript File',
+        extension: '.js',
+        content: `// PowerSchool Custom JavaScript
+// Created: ${new Date().toISOString().split('T')[0]}
+
+(function() {
+    'use strict';
+    
+    // Your JavaScript code goes here
+    console.log('PowerSchool custom script loaded');
+    
+    // Example: Wait for DOM ready
+    $(document).ready(function() {
+        // DOM manipulation code here
+    });
+    
+})();`
+    },
+    css: {
+        name: 'CSS Stylesheet',
+        extension: '.css',
+        content: `/* PowerSchool Custom CSS
+ * Created: ${new Date().toISOString().split('T')[0]}
+ */
+
+/* Custom styles go here */
+
+.custom-style {
+    /* Your custom styles */
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    /* Mobile styles */
+}`
+    }
+};
+
 class PowerSchoolTreeItem extends vscode.TreeItem {
     constructor(label, collapsibleState, resourceUri, contextValue, remotePath, psApi, localRootPath) {
         super(label, collapsibleState);
@@ -542,6 +692,359 @@ class PowerSchoolAPI {
         });
     }
 
+    async createNewFile(filePath, content) {
+        await this.ensureAuthenticated();
+        
+        console.log('🆕 CREATING NEW FILE ON POWERSCHOOL:');
+        console.log(`   File path: ${filePath}`);
+        console.log(`   Content length: ${content.length} characters`);
+        
+        const pathParts = filePath.split('/');
+        const fileName = pathParts.pop();
+        const folderPath = pathParts.join('/') || '/';
+        
+        const createData = new URLSearchParams({
+            'newAssetName': fileName,
+            'newAssetPath': folderPath,
+            'newAssetType': 'file',
+            'newAssetRoot': ''
+        }).toString();
+        
+        const createOptions = {
+            hostname: new URL(this.baseUrl).hostname,
+            port: 443,
+            path: '/ws/cpm/createAsset',
+            method: 'POST',
+            headers: {
+                'Referer': `${this.baseUrl}/admin/customization/home.html`,
+                'Accept': 'application/json',
+                'User-Agent': 'PowerSchool-CPM-VSCode-Extension/1.0',
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'Content-Length': Buffer.byteLength(createData),
+                'Cookie': this.getCookieHeader()
+            }
+        };
+        
+        return new Promise((resolve, reject) => {
+            const req = https.request(createOptions, (res) => {
+                let data = '';
+                res.on('data', (chunk) => {
+                    data += chunk;
+                });
+                res.on('end', () => {
+                    console.log('📤 CREATE FILE API RESPONSE:');
+                    console.log(`   Status: ${res.statusCode}`);
+                    console.log(`   Raw response: ${data}`);
+                    
+                    try {
+                        const response = JSON.parse(data);
+                        if (res.statusCode === 200 && response.returnMessage && response.returnMessage.includes('successfully')) {
+                            console.log('   ✅ File created successfully, now adding content...');
+                            this.updateExistingFileContent(filePath, content).then(resolve).catch(reject);
+                        } else {
+                            reject(new Error(`Failed to create file: ${response.returnMessage || data}`));
+                        }
+                    } catch (parseError) {
+                        reject(new Error(`PowerSchool returned invalid JSON: ${parseError.message}`));
+                    }
+                });
+            });
+            req.on('error', reject);
+            req.write(createData);
+            req.end();
+        });
+    }
+
+    async updateExistingFileContent(filePath, content) {
+        await this.ensureAuthenticated();
+        
+        console.log('✏️  UPDATING EXISTING FILE CONTENT:');
+        console.log(`   File path: ${filePath}`);
+        console.log(`   Content length: ${content.length} characters`);
+        
+        // Get file info to get customContentId
+        const fileInfo = await this.downloadFileInfo(filePath);
+        
+        // Generate key path from file path (remove leading slash and replace / with .)
+        const keyPath = filePath.replace(/^\/+/, '').replace(/\//g, '.').replace(/\.(html|htm|js|css|txt)$/i, '');
+        
+        // Generate boundary for multipart data
+        const boundary = `----formdata-node-${Math.random().toString(36).substr(2, 16)}`;
+        
+        // Create multipart form data according to PowerSchool API spec
+        const formFields = {
+            'customContentId': fileInfo.activeCustomContentId || fileInfo.draftCustomContentId || 0,
+            'customContent': content,
+            'customContentPath': filePath,
+            'keyPath': keyPath,
+            'keyValueMap': 'null',
+            'publish': 'true'  // Publish directly
+        };
+        
+        const multipartData = this.generateMultipartData(formFields, boundary);
+        
+        console.log(`   Using boundary: ${boundary}`);
+        console.log(`   Custom content ID: ${formFields.customContentId}`);
+        console.log(`   Key path: ${keyPath}`);
+        
+        const options = {
+            hostname: new URL(this.baseUrl).hostname,
+            port: 443,
+            path: '/ws/cpm/customPageContent',
+            method: 'POST',
+            headers: {
+                'Referer': `${this.baseUrl}/admin/customization/home.html`,
+                'Accept': 'application/json',
+                'User-Agent': 'PowerSchool-CPM-VSCode-Extension/1.0',
+                'Content-Type': `multipart/form-data; boundary=${boundary}`,
+                'Content-Length': Buffer.byteLength(multipartData),
+                'Cookie': this.getCookieHeader()
+            }
+        };
+        
+        console.log(`   Request URL: https://${options.hostname}${options.path}`);
+
+        return new Promise((resolve, reject) => {
+            const req = https.request(options, (res) => {
+                let data = '';
+                res.on('data', (chunk) => {
+                    data += chunk;
+                });
+                res.on('end', () => {
+                    console.log('📤 UPDATE FILE API RESPONSE:');
+                    console.log(`   Status: ${res.statusCode}`);
+                    console.log(`   Raw response: ${data}`);
+                    
+                    try {
+                        const response = JSON.parse(data);
+                        console.log(`   Parsed response:`, response);
+                        
+                        if (res.statusCode === 200) {
+                            console.log('   ✅ File content updated successfully');
+                            resolve(response);
+                        } else {
+                            console.log(`   ❌ Update failed with status ${res.statusCode}`);
+                            reject(new Error(`Update failed ${res.statusCode}: ${response.returnMessage || data}`));
+                        }
+                    } catch (parseError) {
+                        console.log(`   ❌ Failed to parse update response: ${parseError.message}`);
+                        reject(new Error(`PowerSchool returned invalid JSON: ${parseError.message}`));
+                    }
+                });
+            });
+            
+            req.on('error', (error) => {
+                console.log(`   ❌ Update request error: ${error.message}`);
+                reject(error);
+            });
+            
+            req.write(multipartData);
+            req.end();
+        });
+    }
+
+    async checkFileExists(filePath) {
+        try {
+            await this.downloadFileInfo(filePath);
+            return true;
+        } catch (error) {
+            console.log(`   ℹ️  File ${filePath} does not exist on PowerSchool: ${error.message}`);
+            return false;
+        }
+    }
+
+    generateMultipartData(fields, boundary) {
+        let data = '';
+        for (const [name, value] of Object.entries(fields)) {
+            data += `--${boundary}\r\n`;
+            data += `Content-Disposition: form-data; name="${name}"\r\n\r\n`;
+            data += `${value}\r\n`;
+        }
+        data += `--${boundary}--\r\n`;
+        return data;
+    }
+
+    async downloadFileInfo(filePath) {
+        const queryParams = new URLSearchParams({
+            LoadFolderInfo: 'false',
+            path: filePath
+        });
+        
+        await this.ensureAuthenticated();
+        
+        const options = {
+            hostname: new URL(this.baseUrl).hostname,
+            port: 443,
+            path: `/ws/cpm/builtintext?${queryParams.toString()}`,
+            method: 'GET',
+            headers: {
+                'Referer': `${this.baseUrl}/admin/customization/home.html`,
+                'Accept': 'application/json',
+                'User-Agent': 'PowerSchool-CPM-VSCode-Extension/1.0',
+                'Cookie': this.getCookieHeader()
+            }
+        };
+
+        return new Promise((resolve, reject) => {
+            const req = https.request(options, (res) => {
+                let data = '';
+                res.on('data', (chunk) => {
+                    data += chunk;
+                });
+                res.on('end', () => {
+                    try {
+                        const response = JSON.parse(data);
+                        if (res.statusCode === 200) {
+                            resolve(response);
+                        } else {
+                            reject(new Error(`Failed to get file info: ${response.message || data}`));
+                        }
+                    } catch (error) {
+                        reject(error);
+                    }
+                });
+            });
+            req.on('error', reject);
+            req.end();
+        });
+    }
+
+    async verifyUpload(filePath) {
+        console.log('🔍 VERIFYING UPLOAD:');
+        console.log(`   Re-downloading ${filePath} to verify changes...`);
+        
+        try {
+            // Wait a moment for PowerSchool to process the upload
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            const verifyContent = await this.downloadFileContent(filePath);
+            console.log(`   Verification content length: ${verifyContent.length}`);
+            console.log(`   Verification preview: ${verifyContent.substring(0, 200)}${verifyContent.length > 200 ? '...' : ''}`);
+            return verifyContent;
+        } catch (error) {
+            console.log(`   ❌ Verification failed: ${error.message}`);
+            throw error;
+        }
+    }
+
+    async downloadFileContent(filePath) {
+        const queryParams = new URLSearchParams({
+            LoadFolderInfo: 'false',
+            path: filePath
+        });
+        
+        await this.ensureAuthenticated();
+        
+        const options = {
+            hostname: new URL(this.baseUrl).hostname,
+            port: 443,
+            path: `/ws/cpm/builtintext?${queryParams.toString()}`,
+            method: 'GET',
+            headers: {
+                'Referer': `${this.baseUrl}/admin/customization/home.html`,
+                'Accept': 'application/json',
+                'User-Agent': 'PowerSchool-CPM-VSCode-Extension/1.0',
+                'Cookie': this.getCookieHeader()
+            }
+        };
+
+        return new Promise((resolve, reject) => {
+            const req = https.request(options, (res) => {
+                let data = '';
+                res.on('data', (chunk) => {
+                    data += chunk;
+                });
+                res.on('end', () => {
+                    try {
+                        const response = JSON.parse(data);
+                        if (res.statusCode === 200) {
+                            // Return the active custom text or built-in text
+                            const content = response.activeCustomText || response.builtInText || '';
+                            resolve(content);
+                        } else {
+                            reject(new Error(`Failed to download file: ${response.message || data}`));
+                        }
+                    } catch (error) {
+                        reject(error);
+                    }
+                });
+            });
+            req.on('error', reject);
+            req.end();
+        });
+    }
+
+    async getCompleteDirectoryStructure(rootPath = '/', maxDepth = 3) {
+        console.log('🌲 SCANNING COMPLETE POWERSCHOOL DIRECTORY STRUCTURE');
+        console.log('====================================================');
+        
+        const scannedPaths = new Set();
+        const allFiles = [];
+        const allFolders = [];
+
+        const scanFolder = async (currentPath, depth = 0) => {
+            if (depth > maxDepth || scannedPaths.has(currentPath)) {
+                return;
+            }
+            
+            scannedPaths.add(currentPath);
+            console.log(`${'  '.repeat(depth)}📂 Scanning: ${currentPath} (depth ${depth})`);
+            
+            try {
+                const tree = await this.getFolderTree(currentPath, 1);
+                
+                if (tree.folder) {
+                    const folderInfo = {
+                        path: currentPath,
+                        name: tree.folder.text,
+                        depth: depth
+                    };
+                    allFolders.push(folderInfo);
+                    
+                    // Scan subfolders
+                    if (tree.folder.subFolders && tree.folder.subFolders.length > 0) {
+                        for (const subfolder of tree.folder.subFolders) {
+                            const subfolderPath = currentPath === '/' ? `/${subfolder.text}` : `${currentPath}/${subfolder.text}`;
+                            await scanFolder(subfolderPath, depth + 1);
+                        }
+                    }
+                    
+                    // Collect files
+                    if (tree.folder.pages && tree.folder.pages.length > 0) {
+                        for (const page of tree.folder.pages) {
+                            const filePath = currentPath === '/' ? `/${page.text}` : `${currentPath}/${page.text}`;
+                            const fileInfo = {
+                                path: filePath,
+                                name: page.text,
+                                folderPath: currentPath,
+                                depth: depth
+                            };
+                            allFiles.push(fileInfo);
+                            console.log(`${'  '.repeat(depth + 1)}📄 ${filePath}`);
+                        }
+                    }
+                }
+                
+                // Small delay to avoid overwhelming the server
+                await new Promise(resolve => setTimeout(resolve, 100));
+                
+            } catch (error) {
+                console.log(`${'  '.repeat(depth)}❌ Error scanning ${currentPath}: ${error.message}`);
+            }
+        };
+
+        await scanFolder(rootPath, 0);
+        
+        console.log(`\\n📊 SCAN COMPLETE: Found ${allFiles.length} files in ${allFolders.length} folders`);
+        
+        return {
+            files: allFiles.sort((a, b) => a.path.localeCompare(b.path)),
+            folders: allFolders.sort((a, b) => a.path.localeCompare(b.path)),
+            totalFiles: allFiles.length,
+            totalFolders: allFolders.length
+        };
+    }
+
     async testUploadEndpoint() {
         await this.ensureAuthenticated();
         
@@ -606,8 +1109,14 @@ class PowerSchoolAPI {
         console.log(`   Content length: ${content.length} characters`);
         console.log(`   Content preview: ${content.substring(0, 100)}${content.length > 100 ? '...' : ''}`);
         
-        // First get the file info to get customContentId if it exists
-        const fileInfo = await this.downloadFileInfo(filePath);
+        // First try to get the file info to get customContentId if it exists
+        let fileInfo = null;
+        try {
+            fileInfo = await this.downloadFileInfo(filePath);
+        } catch (error) {
+            console.log(`   ℹ️  File doesn't exist on PowerSchool yet (new file): ${error.message}`);
+            fileInfo = { activeCustomContentId: 0 }; // New file
+        }
         
         // Generate key path from file path (remove leading slash and replace / with .)
         const keyPath = filePath.replace(/^\/+/, '').replace(/\//g, '.').replace(/\.(html|htm|js|css|txt)$/i, '');
@@ -693,119 +1202,6 @@ class PowerSchoolAPI {
             });
             
             req.write(multipartData);
-            req.end();
-        });
-    }
-
-
-    
-    async verifyUpload(filePath) {
-        console.log('🔍 VERIFYING UPLOAD:');
-        console.log(`   Re-downloading ${filePath} to verify changes...`);
-        
-        try {
-            // Wait a moment for PowerSchool to process the upload
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            
-            const verifyContent = await this.downloadFileContent(filePath);
-            console.log(`   Verification content length: ${verifyContent.length}`);
-            console.log(`   Verification preview: ${verifyContent.substring(0, 200)}${verifyContent.length > 200 ? '...' : ''}`);
-            return verifyContent;
-        } catch (error) {
-            console.log(`   ❌ Verification failed: ${error.message}`);
-            throw error;
-        }
-    }
-    
-    async downloadFileContent(filePath) {
-        const queryParams = new URLSearchParams({
-            LoadFolderInfo: 'false',
-            path: filePath
-        });
-        
-        await this.ensureAuthenticated();
-        
-        const options = {
-            hostname: new URL(this.baseUrl).hostname,
-            port: 443,
-            path: `/ws/cpm/builtintext?${queryParams.toString()}`,
-            method: 'GET',
-            headers: {
-                'Referer': `${this.baseUrl}/admin/customization/home.html`,
-                'Accept': 'application/json',
-                'User-Agent': 'PowerSchool-CPM-VSCode-Extension/1.0',
-                'Cookie': this.getCookieHeader()
-            }
-        };
-
-        return new Promise((resolve, reject) => {
-            const req = https.request(options, (res) => {
-                let data = '';
-                res.on('data', (chunk) => {
-                    data += chunk;
-                });
-                res.on('end', () => {
-                    try {
-                        const response = JSON.parse(data);
-                        if (res.statusCode === 200) {
-                            // Return the active custom text or built-in text
-                            const content = response.activeCustomText || response.builtInText || '';
-                            resolve(content);
-                        } else {
-                            reject(new Error(`Failed to download file: ${response.message || data}`));
-                        }
-                    } catch (error) {
-                        reject(error);
-                    }
-                });
-            });
-            req.on('error', reject);
-            req.end();
-        });
-    }
-
-    // Get file info including custom content ID for uploads
-    async downloadFileInfo(filePath) {
-        const queryParams = new URLSearchParams({
-            LoadFolderInfo: 'false',
-            path: filePath
-        });
-        
-        await this.ensureAuthenticated();
-        
-        const options = {
-            hostname: new URL(this.baseUrl).hostname,
-            port: 443,
-            path: `/ws/cpm/builtintext?${queryParams.toString()}`,
-            method: 'GET',
-            headers: {
-                'Referer': `${this.baseUrl}/admin/customization/home.html`,
-                'Accept': 'application/json',
-                'User-Agent': 'PowerSchool-CPM-VSCode-Extension/1.0',
-                'Cookie': this.getCookieHeader()
-            }
-        };
-
-        return new Promise((resolve, reject) => {
-            const req = https.request(options, (res) => {
-                let data = '';
-                res.on('data', (chunk) => {
-                    data += chunk;
-                });
-                res.on('end', () => {
-                    try {
-                        const response = JSON.parse(data);
-                        if (res.statusCode === 200) {
-                            resolve(response);
-                        } else {
-                            reject(new Error(`Failed to get file info: ${response.message || data}`));
-                        }
-                    } catch (error) {
-                        reject(error);
-                    }
-                });
-            });
-            req.on('error', reject);
             req.end();
         });
     }
@@ -938,7 +1334,311 @@ function activate(context) {
         }
     });
 
-    context.subscriptions.push(treeView, helloCommand, refreshCommand, downloadCommand, publishCommand, publishCurrentCommand, debugUploadCommand, testEndpointsCommand);
+    const createNewFileCommand = vscode.commands.registerCommand('powerschool-cpm.createNewFile', async () => {
+        try {
+            // Show quick pick for file type
+            const templateOptions = Object.keys(FILE_TEMPLATES).map(key => ({
+                label: FILE_TEMPLATES[key].name,
+                description: `Create a new ${FILE_TEMPLATES[key].name.toLowerCase()}`,
+                key: key
+            }));
+            
+            const selectedTemplate = await vscode.window.showQuickPick(templateOptions, {
+                placeHolder: 'Select the type of PowerSchool file to create'
+            });
+            
+            if (!selectedTemplate) return;
+            
+            // Get file name from user
+            const fileName = await vscode.window.showInputBox({
+                prompt: `Enter name for new ${selectedTemplate.label}`,
+                placeHolder: `my-new-page${FILE_TEMPLATES[selectedTemplate.key].extension}`,
+                validateInput: (value) => {
+                    if (!value) return 'File name is required';
+                    if (!value.endsWith(FILE_TEMPLATES[selectedTemplate.key].extension)) {
+                        return `File name must end with ${FILE_TEMPLATES[selectedTemplate.key].extension}`;
+                    }
+                    return null;
+                }
+            });
+            
+            if (!fileName) return;
+            
+            // Get target directory
+            const pathOptions = [
+                { label: '/admin', description: 'Admin pages (admin folder)' },
+                { label: '/admin/students', description: 'Student admin pages' },
+                { label: '/admin/teachers', description: 'Teacher admin pages' },
+                { label: '/admin/schools', description: 'School admin pages' },
+                { label: '/public', description: 'Public pages' },
+                { label: '/images/css', description: 'CSS stylesheets' },
+                { label: '/images/javascript', description: 'JavaScript files' },
+                { label: 'Custom path...', description: 'Enter a custom PowerSchool path' }
+            ];
+            
+            const selectedPath = await vscode.window.showQuickPick(pathOptions, {
+                placeHolder: 'Select where to create the file in PowerSchool'
+            });
+            
+            if (!selectedPath) return;
+            
+            let targetPath = selectedPath.label;
+            if (selectedPath.label === 'Custom path...') {
+                const customPath = await vscode.window.showInputBox({
+                    prompt: 'Enter PowerSchool path (e.g., /admin/custom)',
+                    placeHolder: '/admin/custom',
+                    validateInput: (value) => {
+                        if (!value) return 'Path is required';
+                        if (!value.startsWith('/')) return 'Path must start with /';
+                        return null;
+                    }
+                });
+                if (!customPath) return;
+                targetPath = customPath;
+            }
+            
+            // Create local file path
+            const remotePath = `${targetPath}/${fileName}`;
+            const localFilePath = path.join(psWebrootPath, remotePath.replace(/^\/+/g, ''));
+            
+            // Create local directory if it doesn't exist
+            const localDir = path.dirname(localFilePath);
+            if (!fs.existsSync(localDir)) {
+                fs.mkdirSync(localDir, { recursive: true });
+            }
+            
+            // Write template content to local file
+            const template = FILE_TEMPLATES[selectedTemplate.key];
+            fs.writeFileSync(localFilePath, template.content);
+            
+            // Open the file in editor
+            const document = await vscode.workspace.openTextDocument(localFilePath);
+            await vscode.window.showTextDocument(document);
+            
+            vscode.window.showInformationMessage(`Created ${fileName} locally. Edit the file and use "Publish to PowerSchool" when ready.`);
+            
+        } catch (error) {
+            console.error('Failed to create new file:', error);
+            vscode.window.showErrorMessage(`Failed to create file: ${error.message}`);
+        }
+    });
+    
+    const publishAnyFileCommand = vscode.commands.registerCommand('powerschool-cpm.publishAnyFile', async () => {
+        try {
+            const activeEditor = vscode.window.activeTextEditor;
+            if (!activeEditor) {
+                vscode.window.showWarningMessage('No active file to publish.');
+                return;
+            }
+            
+            const filePath = activeEditor.document.fileName;
+            const relativePath = path.relative(psWebrootPath, filePath);
+            
+            if (!relativePath || relativePath.startsWith('..')) {
+                vscode.window.showWarningMessage('File is not in the PowerSchool workspace.');
+                return;
+            }
+            
+            // Convert local path to PowerSchool path format
+            const remotePath = '/' + relativePath.replace(/\\/g, '/');
+            
+            // Try to find similar files to suggest the correct path
+            let suggestedPath = remotePath;
+            let pathSuggestions = [remotePath];
+            
+            try {
+                console.log('🔍 Looking for similar files to suggest correct path...');
+                const fileName = path.basename(filePath);
+                const fileNameWithoutExt = path.parse(fileName).name;
+                
+                // Search in common admin areas first
+                const searchPaths = ['/admin/students', '/admin/teachers', '/admin/schools', '/admin', '/public'];
+                
+                for (const searchPath of searchPaths) {
+                    try {
+                        const tree = await api.getFolderTree(searchPath, 1);
+                        if (tree.folder && tree.folder.pages) {
+                            for (const page of tree.folder.pages) {
+                                if (page.text.toLowerCase().includes(fileNameWithoutExt.toLowerCase()) || 
+                                    fileNameWithoutExt.toLowerCase().includes(page.text.toLowerCase().split('.')[0])) {
+                                    const suggestion = `${searchPath}/${page.text}`;
+                                    if (!pathSuggestions.includes(suggestion)) {
+                                        pathSuggestions.push(suggestion);
+                                        console.log(`   💡 Found similar file: ${suggestion}`);
+                                    }
+                                }
+                            }
+                        }
+                    } catch {
+                        // Continue searching other paths
+                    }
+                }
+                
+                if (pathSuggestions.length > 1) {
+                    suggestedPath = pathSuggestions[1]; // Use the first match found
+                }
+                
+            } catch (error) {
+                console.log('   ⚠️ Could not search for similar files:', error.message);
+            }
+
+            // Ask user to confirm the PowerSchool path with suggestions
+            let confirmedPath;
+            if (pathSuggestions.length > 1) {
+                const pathChoice = await vscode.window.showQuickPick(
+                    pathSuggestions.map(p => ({ label: p, description: p === remotePath ? 'Original guess' : 'Similar file found' })),
+                    {
+                        placeHolder: 'Select the correct PowerSchool path for this file',
+                        canPickMany: false
+                    }
+                );
+                
+                if (!pathChoice) return;
+                
+                confirmedPath = await vscode.window.showInputBox({
+                    prompt: 'Confirm or edit the PowerSchool path for this file',
+                    value: pathChoice.label,
+                    validateInput: (value) => {
+                        if (!value) return 'Path is required';
+                        if (!value.startsWith('/')) return 'Path must start with /';
+                        return null;
+                    }
+                });
+            } else {
+                confirmedPath = await vscode.window.showInputBox({
+                    prompt: 'Confirm or edit the PowerSchool path for this file (use "Show Full Directory Structure" command to see all paths)',
+                    value: suggestedPath,
+                    validateInput: (value) => {
+                        if (!value) return 'Path is required';
+                        if (!value.startsWith('/')) return 'Path must start with /';
+                        return null;
+                    }
+                });
+            }
+            
+            if (!confirmedPath) return;
+            
+            console.log(`📤 Publishing file to PowerSchool: ${confirmedPath}`);
+            vscode.window.showInformationMessage(`Publishing ${path.basename(filePath)} to PowerSchool...`);
+            
+            // Save the file first if it has unsaved changes
+            if (activeEditor.document.isDirty) {
+                await activeEditor.document.save();
+            }
+            
+            const fileContent = fs.readFileSync(filePath, 'utf8');
+            console.log(`📄 File content (${fileContent.length} chars): ${fileContent.substring(0, 200)}...`);
+            
+            // Check if file exists on PowerSchool to determine which API endpoint to use
+            console.log('🔍 Checking if file exists on PowerSchool...');
+            const fileExists = await api.checkFileExists(confirmedPath);
+            
+            let uploadResult;
+            if (fileExists) {
+                console.log('✏️  File exists, updating content...');
+                uploadResult = await api.updateExistingFileContent(confirmedPath, fileContent);
+            } else {
+                console.log('🆕 File does not exist, creating new file...');
+                uploadResult = await api.createNewFile(confirmedPath, fileContent);
+            }
+            console.log(`📤 Upload result:`, uploadResult);
+            
+            // Verify the upload
+            vscode.window.showInformationMessage(`Verifying upload of ${path.basename(filePath)}...`);
+            const verifiedContent = await api.verifyUpload(confirmedPath);
+            
+            // Compare content
+            const uploadSuccessful = fileContent === verifiedContent;
+            
+            if (uploadSuccessful) {
+                console.log(`✅ Published and verified: ${confirmedPath}`);
+                vscode.window.showInformationMessage(`Published ${path.basename(filePath)} successfully! Content verified.`);
+                
+                // Refresh tree view to show the new file
+                treeProvider.refresh();
+            } else {
+                console.log(`⚠️  Upload completed but verification shows different content`);
+                console.log(`   Original length: ${fileContent.length}`);
+                console.log(`   Verified length: ${verifiedContent.length}`);
+                console.log(`   First difference at char: ${findFirstDifference(fileContent, verifiedContent)}`);
+                vscode.window.showWarningMessage(`Published ${path.basename(filePath)} but content verification failed. Check console for details.`);
+            }
+            
+        } catch (error) {
+            console.error('❌ Failed to publish file:', error);
+            vscode.window.showErrorMessage(`Failed to publish file: ${error.message}`);
+        }
+    });
+
+    const showFullPathsCommand = vscode.commands.registerCommand('powerschool-cpm.showFullPaths', async () => {
+        try {
+            vscode.window.showInformationMessage('Scanning PowerSchool directory structure... This may take a moment.');
+            console.log('🌲 Starting complete PowerSchool directory scan...');
+            
+            const structure = await api.getCompleteDirectoryStructure('/', 3);
+            
+            // Show results in output channel for easy viewing
+            const outputChannel = vscode.window.createOutputChannel('PowerSchool Directory Structure');
+            outputChannel.clear();
+            outputChannel.show(true);
+            
+            outputChannel.appendLine('========================================');
+            outputChannel.appendLine('POWERSCHOOL COMPLETE DIRECTORY STRUCTURE');
+            outputChannel.appendLine('========================================');
+            outputChannel.appendLine('');
+            outputChannel.appendLine(`Total Folders: ${structure.totalFolders}`);
+            outputChannel.appendLine(`Total Files: ${structure.totalFiles}`);
+            outputChannel.appendLine('');
+            
+            outputChannel.appendLine('📁 FOLDERS:');
+            outputChannel.appendLine('----------');
+            for (const folder of structure.folders) {
+                const indent = '  '.repeat(folder.depth);
+                outputChannel.appendLine(`${indent}📂 ${folder.path} (${folder.name})`);
+            }
+            
+            outputChannel.appendLine('');
+            outputChannel.appendLine('📄 FILES:');
+            outputChannel.appendLine('--------');
+            for (const file of structure.files) {
+                outputChannel.appendLine(`📄 ${file.path}`);
+                outputChannel.appendLine(`   └─ Folder: ${file.folderPath}`);
+                outputChannel.appendLine(`   └─ Name: ${file.name}`);
+                outputChannel.appendLine('');
+            }
+            
+            // Also search for the specific file mentioned
+            const generalDemographicsFiles = structure.files.filter(f => 
+                f.name.toLowerCase().includes('generaldemographics') || 
+                f.path.toLowerCase().includes('generaldemographics')
+            );
+            
+            if (generalDemographicsFiles.length > 0) {
+                outputChannel.appendLine('🎯 GENERALDEMOGRAPHICS FILES FOUND:');
+                outputChannel.appendLine('================================');
+                for (const file of generalDemographicsFiles) {
+                    outputChannel.appendLine(`✅ ${file.path}`);
+                    outputChannel.appendLine(`   └─ Use this exact path when publishing: ${file.path}`);
+                    outputChannel.appendLine('');
+                }
+            }
+            
+            outputChannel.appendLine('📋 HOW TO USE THESE PATHS:');
+            outputChannel.appendLine('========================');
+            outputChannel.appendLine('1. When creating new files, use any folder path shown above');
+            outputChannel.appendLine('2. When publishing files, use the EXACT file path shown above');
+            outputChannel.appendLine('3. Example: /admin/students/generaldemographics.html');
+            outputChannel.appendLine('4. Make sure your local folder structure matches the PowerSchool structure');
+            
+            vscode.window.showInformationMessage(`Directory scan complete! Found ${structure.totalFiles} files in ${structure.totalFolders} folders. Check the "PowerSchool Directory Structure" output panel for details.`);
+            
+        } catch (error) {
+            console.error('Failed to scan directory structure:', error);
+            vscode.window.showErrorMessage(`Failed to scan PowerSchool structure: ${error.message}`);
+        }
+    });
+
+    context.subscriptions.push(treeView, helloCommand, refreshCommand, downloadCommand, publishCommand, publishCurrentCommand, debugUploadCommand, testEndpointsCommand, createNewFileCommand, publishAnyFileCommand, showFullPathsCommand);
     
     console.log('🌲 PowerSchool CPM tree view initialized!');
     vscode.window.showInformationMessage('PowerSchool CPM: Use the PowerSchool Explorer panel to browse and download files!');
