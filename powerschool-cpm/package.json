@@ -2,15 +2,22 @@
   "name": "powerschool-cpm",
   "displayName": "PowerSchool CPM",
   "description": "Manage custom pages in PowerSchool",
-  "version": "0.0.1",
+  "version": "0.0.8",
+  "publisher": "zuvy",
   "engines": {
     "vscode": "^1.104.0"
   },
   "categories": [
     "Other"
   ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zuvy/powerschool-cpm.git"
+  },
   "activationEvents": [
-    "onStartupFinished"
+    "onView:powerschool-cpm-explorer",
+    "onCommand:powerschool-cpm.refresh",
+    "onCommand:powerschool-cpm.openSettings"
   ],
   "main": "./extension.js",
   "contributes": {
@@ -119,14 +126,27 @@
       {
         "command": "powerschool-cpm.createTemplate.parentPortal",
         "title": "Parent Portal Page"
+      },
+      {
+        "command": "powerschool-cpm.openSettings",
+        "title": "PowerSchool CPM: Configure Server Settings",
+        "icon": "$(settings-gear)"
       }
     ],
     "views": {
-      "explorer": [
+      "powerschool-cpm": [
         {
           "id": "powerschool-cpm-explorer",
-          "name": "PowerSchool Files",
-          "when": "workspaceFolderCount > 0"
+          "name": "PowerSchool Files"
+        }
+      ]
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "powerschool-cpm",
+          "title": "PowerSchool CPM",
+          "icon": "$(server-environment)"
         }
       ]
     },
@@ -151,6 +171,11 @@
           "command": "powerschool-cpm.createNewFile",
           "when": "view == powerschool-cpm-explorer",
           "group": "navigation"
+        },
+        {
+          "command": "powerschool-cpm.openSettings",
+          "when": "view == powerschool-cpm-explorer",
+          "group": "navigation"
         }
       ],
       "view/item/context": [
@@ -172,7 +197,6 @@
           "command": "powerschool-cpm.publishNewFile",
           "when": "editorIsOpen"
         },
-
         {
           "command": "powerschool-cpm.insertSnippet"
         }
@@ -275,10 +299,28 @@
     "configuration": {
       "title": "PowerSchool CPM",
       "properties": {
+        "powerschool-cpm.serverUrl": {
+          "type": "string",
+          "default": "",
+          "description": "PowerSchool server URL (e.g., https://pstest.yourschool.org)",
+          "scope": "window"
+        },
+        "powerschool-cpm.username": {
+          "type": "string",
+          "default": "",
+          "description": "PowerSchool username for API access",
+          "scope": "window"
+        },
+        "powerschool-cpm.password": {
+          "type": "string",
+          "default": "",
+          "description": "PowerSchool password for API access (stored securely)",
+          "scope": "window"
+        },
         "powerschool-cpm.autoSync": {
           "type": "boolean",
           "default": true,
-          "description": "Automatically sync ps_webroot directory when workspace opens"
+          "description": "Automatically sync workspace directory when workspace opens"
         },
         "powerschool-cpm.maxDepth": {
           "type": "number",
@@ -289,19 +331,12 @@
     }
   },
   "scripts": {
-    "lint": "eslint .",
-    "pretest": "npm run lint",
-    "test": "vscode-test"
+    "lint": "eslint ."
   },
-  "dependencies": {
-    "dotenv": "^17.2.2"
-  },
+  "dependencies": {},
   "devDependencies": {
-    "@types/mocha": "^10.0.10",
     "@types/node": "22.x",
     "@types/vscode": "^1.104.0",
-    "@vscode/test-cli": "^0.0.11",
-    "@vscode/test-electron": "^2.5.2",
     "eslint": "^9.34.0"
   }
 }

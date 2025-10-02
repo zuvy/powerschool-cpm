@@ -5,8 +5,6 @@ const https = require('https');
 const { getTemplatesByCategory, getTemplate } = require('./templates');
 const { getSnippetsByCategory } = require('./code_snippets');
 
-require('dotenv').config({ path: '.env.local' });
-
 // Helper function to find first difference between two strings
 function findFirstDifference(str1, str2) {
     const minLength = Math.min(str1.length, str2.length);
@@ -89,6 +87,38 @@ class PowerSchoolTreeProvider {
     
     async getChildren(element) {
         try {
+            // Check if workspace is available
+            if (!this.localRootPath) {
+                return [{
+                    label: 'No workspace open',
+                    description: 'Please open a folder to browse PowerSchool files',
+                    contextValue: 'placeholder',
+                    iconPath: new vscode.ThemeIcon('folder-opened'),
+                    collapsibleState: vscode.TreeItemCollapsibleState.None
+                }];
+            }
+
+            // Check if PowerSchool credentials are configured
+            const config = vscode.workspace.getConfiguration('powerschool-cpm');
+            const serverUrl = config.get('serverUrl');
+            const username = config.get('username');
+            const password = config.get('password');
+            
+            if (!serverUrl || !username || !password) {
+                const missingItems = [];
+                if (!serverUrl) missingItems.push('Server URL');
+                if (!username) missingItems.push('Username');
+                if (!password) missingItems.push('Password');
+                
+                return [{
+                    label: 'PowerSchool not configured',
+                    description: `Missing: ${missingItems.join(', ')}. Click settings icon to configure.`,
+                    contextValue: 'not-configured',
+                    iconPath: new vscode.ThemeIcon('settings-gear'),
+                    collapsibleState: vscode.TreeItemCollapsibleState.None
+                }];
+            }
+            
             if (!element) {
                 console.log('📡 Loading PowerSchool file tree...');
                 const rootTree = await this.psApi.getFolderTree('/', 1);
@@ -214,6 +244,7 @@ class PowerSchoolTreeProvider {
             port: 443,
             path: `/ws/cpm/builtintext?${queryParams.toString()}`,
             method: 'GET',
+            rejectUnauthorized: false, // Accept self-signed certificates
             headers: {
                 'Referer': `${this.psApi.baseUrl}/admin/customization/home.html`,
                 'Accept': 'application/json',
@@ -303,7 +334,7 @@ class PowerSchoolTreeProvider {
             const relativePath = path.relative(this.localRootPath, filePath);
             
             if (!relativePath || relativePath.startsWith('..')) {
-                vscode.window.showWarningMessage('File is not in the PowerSchool workspace. Only files downloaded from PowerSchool can be published.');
+                vscode.window.showWarningMessage('File is not in the current workspace. Only files within the workspace can be published.');
                 return { success: false, message: 'File not in workspace' };
             }
             
@@ -353,13 +384,48 @@ class PowerSchoolTreeProvider {
 
 class PowerSchoolAPI {
     constructor() {
-        this.baseUrl = process.env.PSTEST_URI;
-        this.username = process.env.PS_USER;
-        this.password = process.env.PS_PASS;
+        // Use only VS Code settings - no environment variables
+        const config = vscode.workspace.getConfiguration('powerschool-cpm');
+        this.baseUrl = config.get('serverUrl');
+        this.username = config.get('username');
+        this.password = config.get('password');
+        
         this.sessionValid = false;
         this.lastSessionCheck = 0;
         this.sessionCheckInterval = 5 * 60 * 1000;
         this.cookies = new Map();
+        
+        // Validate required settings
+        if (!this.baseUrl || !this.username || !this.password) {
+            console.warn('PowerSchool CPM: Server credentials not configured. Please configure in VS Code settings.');
+        }
+    }
+
+    // Clear authentication state and reload configuration
+    clearAuth() {
+        console.log('🔒 Clearing PowerSchool authentication state...');
+        this.sessionValid = false;
+        this.lastSessionCheck = 0;
+        this.cookies.clear();
+        
+        // Reload configuration from VS Code settings
+        this.reloadConfig();
+    }
+
+    // Reload configuration from VS Code settings
+    reloadConfig() {
+        console.log('⚙️ Reloading PowerSchool configuration from VS Code settings...');
+        const config = vscode.workspace.getConfiguration('powerschool-cpm');
+        this.baseUrl = config.get('serverUrl');
+        this.username = config.get('username');
+        this.password = config.get('password');
+        
+        // Validate required settings
+        if (!this.baseUrl || !this.username || !this.password) {
+            console.warn('PowerSchool CPM: Server credentials not configured. Please configure in VS Code settings.');
+        } else {
+            console.log(`📡 PowerSchool configuration loaded: ${this.baseUrl} (user: ${this.username})`);
+        }
     }
 
     parseCookies(cookieHeaders) {
@@ -390,6 +456,7 @@ class PowerSchoolAPI {
             port: 443,
             path: '/admin/pw.html',
             method: 'GET',
+            rejectUnauthorized: false, // Accept self-signed certificates
             headers: {
                 'User-Agent': 'PowerSchool-CPM-VSCode-Extension/1.0'
             }
@@ -418,6 +485,7 @@ class PowerSchoolAPI {
             port: 443,
             path: '/admin/home.html',
             method: 'POST',
+            rejectUnauthorized: false, // Accept self-signed certificates
             headers: {
                 'User-Agent': 'PowerSchool-CPM-VSCode-Extension/1.0',
                 'Content-Type': 'application/x-www-form-urlencoded',
@@ -455,6 +523,7 @@ class PowerSchoolAPI {
             port: 443,
             path: '/admin/customization/home.html',
             method: 'GET',
+            rejectUnauthorized: false, // Accept self-signed certificates
             headers: {
                 'User-Agent': 'PowerSchool-CPM-VSCode-Extension/1.0',
                 'Cookie': this.getCookieHeader()
@@ -514,6 +583,7 @@ class PowerSchoolAPI {
             port: 443,
             path: `/ws/cpm/tree?${queryParams.toString()}`,
             method: 'GET',
+            rejectUnauthorized: false, // Accept self-signed certificates
             headers: {
                 'Referer': `${this.baseUrl}/admin/customization/home.html`,
                 'Accept': 'application/json',
@@ -569,6 +639,7 @@ class PowerSchoolAPI {
             port: 443,
             path: '/ws/cpm/createAsset',
             method: 'POST',
+            rejectUnauthorized: false, // Accept self-signed certificates
             headers: {
                 'Referer': `${this.baseUrl}/admin/customization/home.html`,
                 'Accept': 'application/json',
@@ -646,6 +717,7 @@ class PowerSchoolAPI {
             port: 443,
             path: '/ws/cpm/customPageContent',
             method: 'POST',
+            rejectUnauthorized: false, // Accept self-signed certificates
             headers: {
                 'Referer': `${this.baseUrl}/admin/customization/home.html`,
                 'Accept': 'application/json',
@@ -731,6 +803,7 @@ class PowerSchoolAPI {
             port: 443,
             path: `/ws/cpm/builtintext?${queryParams.toString()}`,
             method: 'GET',
+            rejectUnauthorized: false, // Accept self-signed certificates
             headers: {
                 'Referer': `${this.baseUrl}/admin/customization/home.html`,
                 'Accept': 'application/json',
@@ -794,6 +867,7 @@ class PowerSchoolAPI {
             port: 443,
             path: `/ws/cpm/builtintext?${queryParams.toString()}`,
             method: 'GET',
+            rejectUnauthorized: false, // Accept self-signed certificates
             headers: {
                 'Referer': `${this.baseUrl}/admin/customization/home.html`,
                 'Accept': 'application/json',
@@ -921,6 +995,7 @@ class PowerSchoolAPI {
                 port: 443,
                 path: endpoint,
                 method: 'OPTIONS', // Use OPTIONS to test endpoint availability
+                rejectUnauthorized: false, // Accept self-signed certificates
                 headers: {
                     'Referer': `${this.baseUrl}/admin/customization/home.html`,
                     'User-Agent': 'PowerSchool-CPM-VSCode-Extension/1.0',
@@ -1000,6 +1075,7 @@ class PowerSchoolAPI {
             port: 443,
             path: '/ws/cpm/customPageContent',
             method: 'POST',
+            rejectUnauthorized: false, // Accept self-signed certificates
             headers: {
                 'Referer': `${this.baseUrl}/admin/customization/home.html`,
                 'Accept': 'application/json',
@@ -1062,59 +1138,130 @@ class PowerSchoolAPI {
 }
 
 function activate(context) {
-    console.log('PowerSchool CPM extension is now active!');
+    console.log('🚀 PowerSchool CPM extension activation started!');
 
-    // Get workspace folder
-    const workspaceFolders = vscode.workspace.workspaceFolders;
-    let psWebrootPath = null;
-    
-    if (workspaceFolders) {
-        for (const folder of workspaceFolders) {
-            if (folder.name === 'ps_webroot' || folder.uri.path.endsWith('/ps_webroot')) {
-                psWebrootPath = folder.uri.fsPath;
-                break;
-            }
-        }
-    }
-    
-    if (!psWebrootPath && workspaceFolders && workspaceFolders.length > 0) {
-        psWebrootPath = workspaceFolders[0].uri.fsPath;
-    }
-    
-    if (!psWebrootPath) {
-        vscode.window.showWarningMessage('No workspace folder found. Please open a folder to use PowerSchool CPM extension.');
+    // Prevent double activation
+    if (global.powerschoolCpmActivated) {
+        console.warn('PowerSchool CPM already activated, skipping...');
         return;
+    }
+    global.powerschoolCpmActivated = true;
+    
+    console.log('✅ PowerSchool CPM activation flag set');
+
+    // Get workspace folder - use the first workspace folder as root
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    let workspaceRootPath = null;
+    
+    if (workspaceFolders && workspaceFolders.length > 0) {
+        workspaceRootPath = workspaceFolders[0].uri.fsPath;
+        console.log(`📁 Using workspace root: ${workspaceRootPath}`);
+    } else {
+        workspaceRootPath = null; // Will be handled by tree provider
+        console.log('No workspace folder found - extension will prompt user to open folder when needed.');
     }
 
     // Initialize PowerSchool API and Tree Provider
+    console.log('🔧 Initializing PowerSchool API and Tree Provider...');
     const api = new PowerSchoolAPI();
-    const treeProvider = new PowerSchoolTreeProvider(api, psWebrootPath);
+    const treeProvider = new PowerSchoolTreeProvider(api, workspaceRootPath);
     
-    // Register the tree view
-    const treeView = vscode.window.createTreeView('powerschool-cpm-explorer', {
-        treeDataProvider: treeProvider,
-        showCollapseAll: true
-    });
-    
-    // Register commands
-    const refreshCommand = vscode.commands.registerCommand('powerschool-cpm.refresh', () => {
+    // Store globally for cleanup
+    global.powerschoolCpmTreeProvider = treeProvider;
+    console.log('📂 Tree provider created');
+
+    // Watch for workspace changes to update the tree provider
+    const workspaceWatcher = vscode.workspace.onDidChangeWorkspaceFolders(() => {
+        const workspaceFolders = vscode.workspace.workspaceFolders;
+        let newWorkspaceRootPath = null;
+        
+        if (workspaceFolders && workspaceFolders.length > 0) {
+            newWorkspaceRootPath = workspaceFolders[0].uri.fsPath;
+            console.log(`📁 Workspace changed, using new root: ${newWorkspaceRootPath}`);
+        } else {
+            console.log('📁 Workspace closed, no root directory available');
+        }
+        
+        treeProvider.localRootPath = newWorkspaceRootPath;
         treeProvider.refresh();
-        vscode.window.showInformationMessage('PowerSchool file tree refreshed!');
+    });
+
+    // Watch for configuration changes to update API settings
+    const configWatcher = vscode.workspace.onDidChangeConfiguration(e => {
+        if (e.affectsConfiguration('powerschool-cpm')) {
+            console.log('⚙️ PowerSchool CPM settings changed, refreshing connection...');
+            
+            // Clear authentication and reload configuration
+            api.clearAuth();
+            
+            // Refresh the tree to apply new settings
+            treeProvider.refresh();
+        }
+    });
+
+    // Check if tree view already exists and dispose it
+    if (global.powerschoolCpmTreeView) {
+        try {
+            global.powerschoolCpmTreeView.dispose();
+        } catch (error) {
+            console.warn('Error disposing previous tree view:', error.message);
+        }
+        global.powerschoolCpmTreeView = null;
+    }
+    
+    // Register the tree view with error handling
+    let treeView;
+    try {
+        treeView = vscode.window.createTreeView('powerschool-cpm-explorer', {
+            treeDataProvider: treeProvider,
+            showCollapseAll: true
+        });
+        
+        // Store globally for cleanup
+        global.powerschoolCpmTreeView = treeView;
+        console.log('🌲 Tree view created successfully');
+        
+    } catch (error) {
+        console.error('❌ Failed to create tree view powerschool-cpm-explorer:', error.message);
+        vscode.window.showErrorMessage('PowerSchool CPM: Tree view registration failed. Please reload VS Code window (Cmd+Shift+P → "Developer: Reload Window").');
+        return;
+    }
+    
+    // Register commands with error handling for duplicates
+    const registerCommandSafely = (commandId, callback) => {
+        try {
+            return vscode.commands.registerCommand(commandId, callback);
+        } catch (error) {
+            console.warn(`Command ${commandId} already registered:`, error.message);
+            return { dispose: () => {} }; // Mock disposable
+        }
+    };
+    
+    const refreshCommand = registerCommandSafely('powerschool-cpm.refresh', () => {
+        console.log('🔄 Refresh command executed - clearing authentication and refreshing tree');
+        
+        // Clear any cached authentication
+        api.clearAuth();
+        
+        // Refresh the tree provider
+        treeProvider.refresh();
+        
+        vscode.window.showInformationMessage('PowerSchool connection refreshed! Tree will reload with new settings.');
     });
     
-    const downloadCommand = vscode.commands.registerCommand('powerschool-cpm.downloadFile', async (treeItem) => {
+    const downloadCommand = registerCommandSafely('powerschool-cpm.downloadFile', async (treeItem) => {
         await treeProvider.downloadFile(treeItem);
     });
     
-    const publishCommand = vscode.commands.registerCommand('powerschool-cpm.publishFile', async (treeItem) => {
+    const publishCommand = registerCommandSafely('powerschool-cpm.publishFile', async (treeItem) => {
         await treeProvider.publishFile(treeItem);
     });
     
-    const publishCurrentCommand = vscode.commands.registerCommand('powerschool-cpm.publishCurrentFile', async () => {
+    const publishCurrentCommand = registerCommandSafely('powerschool-cpm.publishCurrentFile', async () => {
         await treeProvider.publishCurrentFile();
     });
     
-    const createNewFileCommand = vscode.commands.registerCommand('powerschool-cpm.createNewFile', async () => {
+    const createNewFileCommand = registerCommandSafely('powerschool-cpm.createNewFile', async () => {
         try {
             // Get templates organized by category
             const templatesByCategory = getTemplatesByCategory();
@@ -1205,7 +1352,12 @@ function activate(context) {
             
             // Create local file path
             const remotePath = `${targetPath}/${fileName}`;
-            const localFilePath = path.join(psWebrootPath, remotePath.replace(/^\/+/g, ''));
+            const workspaceRoot = global.powerschoolCpmTreeProvider?.localRootPath;
+            if (!workspaceRoot) {
+                vscode.window.showErrorMessage('No workspace folder is open. Please open a folder first.');
+                return;
+            }
+            const localFilePath = path.join(workspaceRoot, remotePath.replace(/^\/+/g, ''));
             
             // Create local directory if it doesn't exist
             const localDir = path.dirname(localFilePath);
@@ -1228,7 +1380,7 @@ function activate(context) {
         }
     });
     
-    const publishNewFileCommand = vscode.commands.registerCommand('powerschool-cpm.publishNewFile', async () => {
+    const publishNewFileCommand = registerCommandSafely('powerschool-cpm.publishNewFile', async () => {
         try {
             const activeEditor = vscode.window.activeTextEditor;
             if (!activeEditor) {
@@ -1237,10 +1389,15 @@ function activate(context) {
             }
             
             const filePath = activeEditor.document.fileName;
-            const relativePath = path.relative(psWebrootPath, filePath);
+            const workspaceRoot = global.powerschoolCpmTreeProvider?.localRootPath;
+            if (!workspaceRoot) {
+                vscode.window.showErrorMessage('No workspace folder is open. Please open a folder first.');
+                return;
+            }
+            const relativePath = path.relative(workspaceRoot, filePath);
             
             if (!relativePath || relativePath.startsWith('..')) {
-                vscode.window.showWarningMessage('File is not in the PowerSchool workspace.');
+                vscode.window.showWarningMessage('File is not in the current workspace.');
                 return;
             }
             
@@ -1375,9 +1532,12 @@ function activate(context) {
         }
     });
 
+    const openSettingsCommand = registerCommandSafely('powerschool-cpm.openSettings', async () => {
+        // Open the PowerSchool CPM settings
+        vscode.commands.executeCommand('workbench.action.openSettings', 'powerschool-cpm');
+    });
 
-
-    const insertSnippetCommand = vscode.commands.registerCommand('powerschool-cpm.insertSnippet', async () => {
+    const insertSnippetCommand = registerCommandSafely('powerschool-cpm.insertSnippet', async () => {
         try {
             const editor = vscode.window.activeTextEditor;
             if (!editor) {
@@ -1450,7 +1610,7 @@ function activate(context) {
     
     const snippetCommands = [];
     snippetKeys.forEach(key => {
-        const command = vscode.commands.registerCommand(`powerschool-cpm.insertSnippet.${key}`, async () => {
+        const command = registerCommandSafely(`powerschool-cpm.insertSnippet.${key}`, async () => {
             try {
                 const editor = vscode.window.activeTextEditor;
                 if (!editor) {
@@ -1485,7 +1645,7 @@ function activate(context) {
     
     const templateCommands = [];
     templateKeys.forEach(key => {
-        const command = vscode.commands.registerCommand(`powerschool-cpm.createTemplate.${key}`, async () => {
+        const command = registerCommandSafely(`powerschool-cpm.createTemplate.${key}`, async () => {
             try {
                 const template = getTemplate(key);
                 if (!template) {
@@ -1543,7 +1703,12 @@ function activate(context) {
                 
                 // Create local file path
                 const remotePath = `${targetPath}/${fileName}`;
-                const localFilePath = path.join(psWebrootPath, remotePath.replace(/^\/+/g, ''));
+                const workspaceRoot = global.powerschoolCpmTreeProvider?.localRootPath;
+                if (!workspaceRoot) {
+                    vscode.window.showErrorMessage('No workspace folder is open. Please open a folder first.');
+                    return;
+                }
+                const localFilePath = path.join(workspaceRoot, remotePath.replace(/^\/+/g, ''));
                 
                 // Create local directory if it doesn't exist
                 const localDir = path.dirname(localFilePath);
@@ -1568,13 +1733,34 @@ function activate(context) {
         templateCommands.push(command);
     });
 
-    context.subscriptions.push(treeView, refreshCommand, downloadCommand, publishCommand, publishCurrentCommand, createNewFileCommand, publishNewFileCommand, insertSnippetCommand, ...snippetCommands, ...templateCommands);
+    context.subscriptions.push(treeView, workspaceWatcher, configWatcher, refreshCommand, downloadCommand, publishCommand, publishCurrentCommand, createNewFileCommand, publishNewFileCommand, openSettingsCommand, insertSnippetCommand, ...snippetCommands, ...templateCommands);
     
-    console.log('🌲 PowerSchool CPM tree view initialized!');
-    vscode.window.showInformationMessage('PowerSchool CPM: Use the PowerSchool Explorer panel to browse and download files!');
+    console.log('� PowerSchool CPM extension fully activated!');
+    console.log('📋 Registered commands:', Object.keys(vscode.commands.getCommands ? {} : {'refresh': 'powerschool-cpm.refresh'}));
+    vscode.window.showInformationMessage('PowerSchool CPM: Extension activated! Use the PowerSchool CPM icon in the Activity Bar to access your files.');
 }
 
-function deactivate() {}
+function deactivate() {
+    // Clean up any resources if needed
+    console.log('PowerSchool CPM extension deactivated');
+    
+    // Clear activation flag and cached data
+    global.powerschoolCpmActivated = false;
+    
+    // Dispose tree view
+    if (global.powerschoolCpmTreeView) {
+        try {
+            global.powerschoolCpmTreeView.dispose();
+        } catch (error) {
+            console.warn('Error disposing tree view during deactivation:', error.message);
+        }
+        global.powerschoolCpmTreeView = null;
+    }
+    
+    if (global.powerschoolCpmTreeProvider) {
+        global.powerschoolCpmTreeProvider = null;
+    }
+}
 
 module.exports = {
     activate,
