@@ -2313,13 +2313,13 @@ function activate(context) {
             
             // Ask user if they want to edit the plugin filename for the ZIP file
             const editedPluginName = await vscode.window.showInputBox({
-                prompt: 'Plugin filename for ZIP (lowercase letters, numbers, hyphens only)',
+                prompt: 'Plugin filename for ZIP (lowercase letters, numbers, hyphens, underscores only)',
                 value: pluginName,
-                placeHolder: 'my-plugin-name',
+                placeHolder: 'my_plugin-name',
                 validateInput: (value) => {
                     if (!value) return 'Plugin filename is required';
-                    if (!/^[a-z0-9-]+$/.test(value)) {
-                        return 'Plugin filename can only contain lowercase letters, numbers, and hyphens';
+                    if (!/^[a-z0-9-_]+$/.test(value)) {
+                        return 'Plugin filename can only contain lowercase letters, numbers, hyphens, and underscores';
                     }
                     return null;
                 }
