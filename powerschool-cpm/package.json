@@ -1,8 +1,8 @@
 {
-  "name": "powerschool-cpm",
-  "displayName": "PowerSchool CPM",
+  "name": "ps-vscode-cpm",
+  "displayName": "ps-vscode-cpm",
   "description": "Manage custom pages in PowerSchool",
-  "version": "0.0.8",
+  "version": "2.5.0",
   "publisher": "zuvy",
   "engines": {
     "vscode": "^1.104.0"
@@ -12,131 +12,147 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/zuvy/powerschool-cpm.git"
+    "url": "https://github.com/zuvy/ps-vscode-cpm.git"
   },
   "activationEvents": [
-    "onView:powerschool-cpm-explorer",
-    "onCommand:powerschool-cpm.refresh",
-    "onCommand:powerschool-cpm.openSettings"
+    "onView:ps-vscode-cpm-explorer",
+    "onCommand:ps-vscode-cpm.refresh",
+    "onCommand:ps-vscode-cpm.openSettings"
   ],
   "main": "./extension.js",
   "contributes": {
     "commands": [
 
       {
-        "command": "powerschool-cpm.refresh",
+        "command": "ps-vscode-cpm.refresh",
         "title": "Refresh",
         "icon": "$(refresh)"
       },
       {
-        "command": "powerschool-cpm.downloadFile",
+        "command": "ps-vscode-cpm.downloadFile",
         "title": "Download File"
       },
       {
-        "command": "powerschool-cpm.publishFile",
+        "command": "ps-vscode-cpm.publishFile",
         "title": "Publish to PowerSchool",
         "icon": "$(cloud-upload)"
       },
       {
-        "command": "powerschool-cpm.publishCurrentFile",
-        "title": "PowerSchool CPM: Publish Current File"
+        "command": "ps-vscode-cpm.publishCurrentFile",
+        "title": "ps-vscode-cpm: Publish Current File"
       },
-
-
       {
-        "command": "powerschool-cpm.createNewFile",
-        "title": "PowerSchool CPM: Create New File",
+        "command": "ps-vscode-cpm.createNewFile",
+        "title": "ps-vscode-cpm: Create New File",
         "icon": "$(new-file)"
       },
       {
-        "command": "powerschool-cpm.publishNewFile",
-        "title": "PowerSchool CPM: Publish New File to PowerSchool",
+        "command": "ps-vscode-cpm.publishNewFile",
+        "title": "ps-vscode-cpm: Publish New File to PowerSchool",
         "icon": "$(cloud-upload)"
       },
-
       {
-        "command": "powerschool-cpm.insertSnippet",
-        "title": "PowerSchool CPM: Insert Code Snippet",
+        "command": "ps-vscode-cpm.showCurrentFilePath",
+        "title": "ps-vscode-cpm: Show File Path Info",
+        "icon": "$(info)"
+      },
+      {
+        "command": "ps-vscode-cpm.insertSnippet",
+        "title": "ps-vscode-cpm: Insert Code Snippet",
         "icon": "$(code)"
       },
       {
-        "command": "powerschool-cpm.insertSnippet.box_round",
-        "title": "Box Round Container"
+        "command": "ps-vscode-cpm.insertSnippet.box_round",
+        "title": "ps-vscode-cpm: Insert Box-Round Div"
       },
       {
-        "command": "powerschool-cpm.insertSnippet.calendar",
+        "command": "ps-vscode-cpm.insertSnippet.calendar",
         "title": "Date Picker Widget"
       },
       {
-        "command": "powerschool-cpm.insertSnippet.dialog",
+        "command": "ps-vscode-cpm.insertSnippet.dialog",
         "title": "Dialog Link"
       },
       {
-        "command": "powerschool-cpm.insertSnippet.dynamic_tabs",
+        "command": "ps-vscode-cpm.insertSnippet.dynamic_tabs",
         "title": "Dynamic Tabs"
       },
       {
-        "command": "powerschool-cpm.insertSnippet.jquery_function",
+        "command": "ps-vscode-cpm.insertSnippet.jquery_function",
         "title": "jQuery Function Block"
       },
       {
-        "command": "powerschool-cpm.insertSnippet.form",
+        "command": "ps-vscode-cpm.insertSnippet.form",
         "title": "PowerSchool Form"
       },
       {
-        "command": "powerschool-cpm.insertSnippet.table",
+        "command": "ps-vscode-cpm.insertSnippet.table",
         "title": "Data Table"
       },
       {
-        "command": "powerschool-cpm.insertSnippet.tlist_sql",
+        "command": "ps-vscode-cpm.insertSnippet.tlist_sql",
         "title": "TList SQL Block"
       },
       {
-        "command": "powerschool-cpm.insertSnippet.collapsible_box",
+        "command": "ps-vscode-cpm.insertSnippet.collapsible_box",
         "title": "Collapsible Box"
       },
       {
-        "command": "powerschool-cpm.insertSnippet.if_block",
+        "command": "ps-vscode-cpm.insertSnippet.if_block",
         "title": "If/Else Block"
       },
       {
-        "command": "powerschool-cpm.insertSnippet.student_info",
+        "command": "ps-vscode-cpm.insertSnippet.student_info",
         "title": "Student Info Tags"
       },
       {
-        "command": "powerschool-cpm.insertSnippet.breadcrumb",
+        "command": "ps-vscode-cpm.insertSnippet.breadcrumb",
         "title": "Breadcrumb Navigation"
       },
       {
-        "command": "powerschool-cpm.createTemplate.admin",
+        "command": "ps-vscode-cpm.createTemplate.admin",
         "title": "Admin Page"
       },
       {
-        "command": "powerschool-cpm.createTemplate.adminStudentPage",
+        "command": "ps-vscode-cpm.createTemplate.adminStudentPage",
         "title": "Admin Student Page"
       },
       {
-        "command": "powerschool-cpm.createTemplate.teacher",
+        "command": "ps-vscode-cpm.createTemplate.teacher",
         "title": "Teacher Page"
       },
       {
-        "command": "powerschool-cpm.createTemplate.teacherBackpack",
+        "command": "ps-vscode-cpm.createTemplate.teacherBackpack",
         "title": "Teacher Backpack Page"
       },
       {
-        "command": "powerschool-cpm.createTemplate.parentPortal",
+        "command": "ps-vscode-cpm.createTemplate.parentPortal",
         "title": "Parent Portal Page"
       },
       {
-        "command": "powerschool-cpm.openSettings",
-        "title": "PowerSchool CPM: Configure Server Settings",
+        "command": "ps-vscode-cpm.openSettings",
+        "title": "ps-vscode-cpm: Configure Server Settings",
         "icon": "$(settings-gear)"
+      },
+      {
+        "command": "ps-vscode-cpm.testConnection",
+        "title": "ps-vscode-cpm: Test OAuth Connection",
+        "icon": "$(plug)"
+      },
+      {
+        "command": "ps-vscode-cpm.setupWebRoot",
+        "title": "ps-vscode-cpm: Setup Plugin Web Root Directory"
+      },
+      {
+        "command": "ps-vscode-cpm.packagePlugin",
+        "title": "ps-vscode-cpm: Package Plugin as ZIP",
+        "icon": "$(package)"
       }
     ],
     "views": {
-      "powerschool-cpm": [
+      "ps-vscode-cpm": [
         {
-          "id": "powerschool-cpm-explorer",
+          "id": "ps-vscode-cpm-explorer",
           "name": "PowerSchool Files"
         }
       ]
@@ -144,185 +160,222 @@
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "powerschool-cpm",
-          "title": "PowerSchool CPM",
+          "id": "ps-vscode-cpm",
+          "title": "ps-vscode-cpm",
           "icon": "$(server-environment)"
         }
       ]
     },
     "submenus": [
       {
-        "id": "powerschool-cpm.snippets",
+        "id": "ps-vscode-cpm.snippets",
         "label": "Insert PowerSchool Snippet"
       },
       {
-        "id": "powerschool-cpm.templates",
+        "id": "ps-vscode-cpm.templates",
         "label": "Create New PowerSchool File"
       }
     ],
     "menus": {
       "view/title": [
         {
-          "command": "powerschool-cpm.refresh",
-          "when": "view == powerschool-cpm-explorer",
+          "command": "ps-vscode-cpm.refresh",
+          "when": "view == ps-vscode-cpm-explorer",
           "group": "navigation"
         },
         {
-          "command": "powerschool-cpm.createNewFile",
-          "when": "view == powerschool-cpm-explorer",
+          "command": "ps-vscode-cpm.createNewFile",
+          "when": "view == ps-vscode-cpm-explorer",
           "group": "navigation"
         },
         {
-          "command": "powerschool-cpm.openSettings",
-          "when": "view == powerschool-cpm-explorer",
+          "command": "ps-vscode-cpm.openSettings",
+          "when": "view == ps-vscode-cpm-explorer",
           "group": "navigation"
         }
       ],
       "view/item/context": [
         {
-          "command": "powerschool-cpm.publishFile",
-          "when": "view == powerschool-cpm-explorer && viewItem == file",
+          "command": "ps-vscode-cpm.publishFile",
+          "when": "view == ps-vscode-cpm-explorer && viewItem == file",
           "group": "inline"
         }
       ],
       "commandPalette": [
         {
-          "command": "powerschool-cpm.publishCurrentFile",
+          "command": "ps-vscode-cpm.publishCurrentFile",
           "when": "editorIsOpen"
         },
         {
-          "command": "powerschool-cpm.createNewFile"
+          "command": "ps-vscode-cpm.createNewFile"
         },
         {
-          "command": "powerschool-cpm.publishNewFile",
+          "command": "ps-vscode-cpm.publishNewFile",
           "when": "editorIsOpen"
         },
         {
-          "command": "powerschool-cpm.insertSnippet"
+          "command": "ps-vscode-cpm.showCurrentFilePath",
+          "when": "editorIsOpen"
+        },
+        {
+          "command": "ps-vscode-cpm.insertSnippet"
         }
       ],
       "editor/context": [
         {
-          "command": "powerschool-cpm.publishCurrentFile",
+          "command": "ps-vscode-cpm.publishCurrentFile",
           "when": "resourceExtname =~ /\\.(html|htm|js|css|txt)$/",
           "group": "powerschool"
         },
         {
-          "command": "powerschool-cpm.publishNewFile",
+          "command": "ps-vscode-cpm.publishNewFile",
           "when": "resourceExtname =~ /\\.(html|htm|js|css|txt)$/",
           "group": "powerschool"
         },
         {
-          "submenu": "powerschool-cpm.snippets",
+          "command": "ps-vscode-cpm.showCurrentFilePath",
+          "when": "resourceExtname =~ /\\.(html|htm|js|css|txt)$/",
+          "group": "powerschool"
+        },
+        {
+          "submenu": "ps-vscode-cpm.snippets",
           "when": "resourceExtname =~ /\\.(html|htm|js|css|txt)$/",
           "group": "powerschool@1"
         },
         {
-          "submenu": "powerschool-cpm.templates",
+          "submenu": "ps-vscode-cpm.templates",
           "when": "resourceExtname =~ /\\.(html|htm|js|css|txt)$/",
           "group": "powerschool@2"
         }
       ],
-      "powerschool-cpm.snippets": [
+      "ps-vscode-cpm.snippets": [
         {
-          "command": "powerschool-cpm.insertSnippet.box_round",
+          "command": "ps-vscode-cpm.insertSnippet.box_round",
           "group": "layout"
         },
         {
-          "command": "powerschool-cpm.insertSnippet.table",
+          "command": "ps-vscode-cpm.insertSnippet.table",
           "group": "layout"
         },
         {
-          "command": "powerschool-cpm.insertSnippet.calendar",
+          "command": "ps-vscode-cpm.insertSnippet.calendar",
           "group": "forms"
         },
         {
-          "command": "powerschool-cpm.insertSnippet.form",
+          "command": "ps-vscode-cpm.insertSnippet.form",
           "group": "forms"
         },
         {
-          "command": "powerschool-cpm.insertSnippet.dialog",
+          "command": "ps-vscode-cpm.insertSnippet.dialog",
           "group": "ui"
         },
         {
-          "command": "powerschool-cpm.insertSnippet.dynamic_tabs",
+          "command": "ps-vscode-cpm.insertSnippet.dynamic_tabs",
           "group": "ui"
         },
         {
-          "command": "powerschool-cpm.insertSnippet.collapsible_box",
+          "command": "ps-vscode-cpm.insertSnippet.collapsible_box",
           "group": "ui"
         },
         {
-          "command": "powerschool-cpm.insertSnippet.jquery_function",
+          "command": "ps-vscode-cpm.insertSnippet.jquery_function",
           "group": "javascript"
         },
         {
-          "command": "powerschool-cpm.insertSnippet.tlist_sql",
+          "command": "ps-vscode-cpm.insertSnippet.tlist_sql",
           "group": "powerschool"
         },
         {
-          "command": "powerschool-cpm.insertSnippet.if_block",
+          "command": "ps-vscode-cpm.insertSnippet.if_block",
           "group": "powerschool"
         },
         {
-          "command": "powerschool-cpm.insertSnippet.student_info",
+          "command": "ps-vscode-cpm.insertSnippet.student_info",
           "group": "powerschool"
         },
         {
-          "command": "powerschool-cpm.insertSnippet.breadcrumb",
+          "command": "ps-vscode-cpm.insertSnippet.breadcrumb",
           "group": "navigation"
         }
       ],
-      "powerschool-cpm.templates": [
+      "ps-vscode-cpm.templates": [
         {
-          "command": "powerschool-cpm.createTemplate.admin",
+          "command": "ps-vscode-cpm.createTemplate.admin",
           "group": "admin"
         },
         {
-          "command": "powerschool-cpm.createTemplate.adminStudentPage",
+          "command": "ps-vscode-cpm.createTemplate.adminStudentPage",
           "group": "admin"
         },
         {
-          "command": "powerschool-cpm.createTemplate.teacher",
+          "command": "ps-vscode-cpm.createTemplate.teacher",
           "group": "teacher"
         },
         {
-          "command": "powerschool-cpm.createTemplate.teacherBackpack",
+          "command": "ps-vscode-cpm.createTemplate.teacherBackpack",
           "group": "teacher"
         },
         {
-          "command": "powerschool-cpm.createTemplate.parentPortal",
+          "command": "ps-vscode-cpm.createTemplate.parentPortal",
           "group": "parent"
         }
       ]
     },
     "configuration": {
-      "title": "PowerSchool CPM",
+      "title": "ps-vscode-cpm",
       "properties": {
-        "powerschool-cpm.serverUrl": {
+        "ps-vscode-cpm.serverUrl": {
           "type": "string",
           "default": "",
           "description": "PowerSchool server URL (e.g., https://pstest.yourschool.org)",
           "scope": "window"
         },
-        "powerschool-cpm.username": {
+        "ps-vscode-cpm.clientId": {
           "type": "string",
           "default": "",
-          "description": "PowerSchool username for API access",
+          "description": "PowerSchool OAuth client ID for API access",
           "scope": "window"
         },
-        "powerschool-cpm.password": {
+        "ps-vscode-cpm.clientSecret": {
           "type": "string",
           "default": "",
-          "description": "PowerSchool password for API access (stored securely)",
+          "description": "PowerSchool OAuth client secret for API access (stored securely)",
           "scope": "window"
         },
-        "powerschool-cpm.autoSync": {
+        "ps-vscode-cpm.username": {
+          "type": "string",
+          "default": "",
+          "description": "PowerSchool username for CPM session authentication (fallback for CPM APIs)",
+          "scope": "window"
+        },
+        "ps-vscode-cpm.password": {
+          "type": "string",
+          "default": "",
+          "description": "PowerSchool password for CPM session authentication (fallback for CPM APIs)",
+          "scope": "window"
+        },
+        "ps-vscode-cpm.authMethod": {
+          "type": "string",
+          "default": "oauth",
+          "enum": ["oauth", "session", "hybrid"],
+          "enumDescriptions": [
+            "Use OAuth only (for standard APIs)",
+            "Use session authentication only (username/password)",
+            "Use OAuth for standard APIs, session for CPM APIs"
+          ],
+          "description": "Authentication method for PowerSchool API access"
+        },
+        "ps-vscode-cpm.pluginWebRoot": {
+          "type": "string",
+          "default": "web_root",
+          "description": "Subdirectory within workspace for PowerSchool plugin files (e.g., 'web_root'). Leave empty to use workspace root."
+        },
+        "ps-vscode-cpm.autoSync": {
           "type": "boolean",
           "default": true,
           "description": "Automatically sync workspace directory when workspace opens"
         },
-        "powerschool-cpm.maxDepth": {
+        "ps-vscode-cpm.maxDepth": {
           "type": "number",
           "default": 5,
           "description": "Maximum folder depth to sync"

@@ -35,13 +35,13 @@ Right-click Context Menu:
 ## How It Works
 
 ### Submenu Configuration (package.json)
-1. **Submenus Section**: Defines the submenu with ID `powerschool-cpm.snippets`
+1. **Submenus Section**: Defines the submenu with ID `ps-vscode-cpm.snippets`
 2. **Context Menu**: References the submenu instead of individual commands
 3. **Submenu Items**: Organized by logical groups (layout, forms, ui, etc.)
 
 ### Command Structure
-- **Main submenu command**: `powerschool-cpm.snippets`  
-- **Individual snippet commands**: `powerschool-cpm.insertSnippet.{snippet_key}`
+- **Main submenu command**: `ps-vscode-cpm.snippets`  
+- **Individual snippet commands**: `ps-vscode-cpm.insertSnippet.{snippet_key}`
 
 ### Available Snippets
 | Category | Snippet | Command Key | Description |
@@ -73,7 +73,7 @@ Right-click Context Menu:
 ```json
 "submenus": [
   {
-    "id": "powerschool-cpm.snippets",
+    "id": "ps-vscode-cpm.snippets",
     "label": "Insert PowerSchool Snippet"  
   }
 ]
@@ -83,7 +83,7 @@ Right-click Context Menu:
 ```json
 "editor/context": [
   {
-    "submenu": "powerschool-cpm.snippets",
+    "submenu": "ps-vscode-cpm.snippets",
     "when": "resourceExtname =~ /\\.(html|htm|js|css|txt)$/", 
     "group": "powerschool"
   }

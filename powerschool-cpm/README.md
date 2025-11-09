@@ -34,8 +34,8 @@ A VS Code extension that provides seamless integration with PowerSchool's Custom
 
 This extension contributes the following settings:
 
-* `powerschool-cpm.autoSync`: Enable/disable automatic sync when workspace opens (default: true)
-* `powerschool-cpm.maxDepth`: Maximum folder depth to sync from PowerSchool (default: 5)
+* `ps-vscode-cpm.autoSync`: Enable/disable automatic sync when workspace opens (default: true)
+* `ps-vscode-cpm.maxDepth`: Maximum folder depth to sync from PowerSchool (default: 5)
 
 ## Environment Configuration
 

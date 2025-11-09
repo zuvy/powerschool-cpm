@@ -111,7 +111,7 @@ Right-click Context Menu:
 ```json
 "submenus": [
   {
-    "id": "powerschool-cpm.templates", 
+    "id": "ps-vscode-cpm.templates", 
     "label": "Create New PowerSchool File"
   }
 ]
@@ -120,11 +120,11 @@ Right-click Context Menu:
 ### Individual Template Commands
 ```json
 {
-  "command": "powerschool-cpm.createTemplate.admin",
+  "command": "ps-vscode-cpm.createTemplate.admin",
   "title": "Admin Page"
 },
 {
-  "command": "powerschool-cpm.createTemplate.adminStudentPage", 
+  "command": "ps-vscode-cpm.createTemplate.adminStudentPage", 
   "title": "Admin Student Page"
 }
 ```
@@ -132,7 +132,7 @@ Right-click Context Menu:
 ### Context Menu Integration  
 ```json
 {
-  "submenu": "powerschool-cpm.templates",
+  "submenu": "ps-vscode-cpm.templates",
   "when": "resourceExtname =~ /\\.(html|htm|js|css|txt)$/",
   "group": "powerschool@2"
 }
